@@ -13,7 +13,9 @@ const RATE_LIMIT = { maxPerSec: 5 };
 // Convert sparse shot Map to dense 2D array for client rendering
 function shotMapToArray(map) {
   const arr = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+  if (!(map instanceof Map)) return arr;
   for (const [k, v] of map) {
+    if (typeof k !== 'string') continue;
     const [x, y] = k.split(',').map(Number);
     arr[y][x] = v;
   }
