@@ -48,6 +48,24 @@ Implemented multiplayer via Socket.IO rooms:
 - Added `.prettierrc` for consistent formatting
 - Updated README with architecture docs, scalability notes, and anti-cheat design
 
+## Deployment
+
+Deployed on **Railway** with auto-deploy from GitHub on push.
+
+### Why Railway?
+
+- Zero-config for Node.js — detects `package.json` and runs automatically
+- Supports persistent volumes, which is critical for SQLite (the DB is a file on disk)
+- Free tier is sufficient for a demo
+- Deploy-on-push means every `git push` updates the live site with no manual steps
+
+### Alternatives Considered
+
+- **Render** — Free tier works for Node.js but has an ephemeral filesystem. SQLite data would be lost on every redeploy, which defeats the persistence feature.
+- **Fly.io** — Supports persistent volumes and edge deployment, but requires more setup (Dockerfile or `fly.toml` config). Overkill for a demo.
+- **Vercel** — Serverless-first, not a natural fit for a long-lived WebSocket server. Would require architectural changes.
+- **EC2 / self-hosted** — Full control but unnecessary ops overhead for a hackathon project.
+
 ## Next Steps
 
 - Redis adapter for Socket.IO (horizontal scaling)
