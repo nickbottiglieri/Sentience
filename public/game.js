@@ -462,10 +462,34 @@ function hasActiveGame() {
   return sessionStorage.getItem('gameId') && sessionStorage.getItem('playerId');
 }
 
+let returnTimer = null;
+
 function updateReturnButton() {
   const btn = document.getElementById('return-btn');
   if (hasActiveGame()) btn.classList.remove('hidden');
-  else btn.classList.add('hidden');
+  else { btn.classList.add('hidden'); clearReturnTimer(); }
+}
+
+function startReturnTimer() {
+  clearReturnTimer();
+  const deadline = Date.now() + 45000;
+  const btn = document.getElementById('return-btn');
+  returnTimer = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    btn.textContent = `↩ Return to Game (${remaining}s)`;
+    if (remaining <= 0) {
+      clearReturnTimer();
+      btn.classList.add('hidden');
+      sessionStorage.removeItem('gameId');
+      sessionStorage.removeItem('playerId');
+      sessionStorage.removeItem('sessionToken');
+    }
+  }, 250);
+}
+
+function clearReturnTimer() {
+  if (returnTimer) { clearInterval(returnTimer); returnTimer = null; }
+  document.getElementById('return-btn').textContent = '↩ Return to Game';
 }
 
 function tryAction(action) {
@@ -480,6 +504,7 @@ function tryAction(action) {
 function returnToGame() {
   document.getElementById('forfeit-overlay').classList.add('hidden');
   pendingAction = null;
+  clearReturnTimer();
   const savedGame = sessionStorage.getItem('gameId');
   const savedPlayer = sessionStorage.getItem('playerId');
   const token = sessionStorage.getItem('sessionToken');
@@ -492,6 +517,7 @@ function returnToGame() {
 
 function confirmForfeit() {
   document.getElementById('forfeit-overlay').classList.add('hidden');
+  clearReturnTimer();
   if (gameId) socket.emit('forfeit', { gameId, playerId });
   gameId = null;
   playerId = null;
@@ -551,6 +577,8 @@ function backToMenu() {
     sessionStorage.removeItem('gameId');
     sessionStorage.removeItem('playerId');
     sessionStorage.removeItem('sessionToken');
+  } else if (gameMode === 'mp' && hasActiveGame()) {
+    startReturnTimer();
   }
   phase = 'menu';
   updateReturnButton();
