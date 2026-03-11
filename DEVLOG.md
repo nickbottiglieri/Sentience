@@ -96,6 +96,27 @@ Added a 45-second grace period for disconnected multiplayer players:
 - Finished games are purged from memory every 5 minutes to prevent resource leaks
 - AI games are excluded from grace period logic
 
+### Spike — Redis Game State Layer
+
+Added a Redis-backed game state store to decouple live game state from the single-process in-memory map, enabling horizontal scaling.
+
+**`src/gameStore.js`** — New module providing a 3-tier game state lookup:
+1. Redis (if `REDIS_URL` is set) — primary cache with 1-hour TTL
+2. In-memory fallback — used when Redis is unavailable
+3. SQLite — cold storage fallback for games not in cache
+
+Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socketMap` since it's per-process and shouldn't be serialized.
+
+**`src/socketHandlers.js`** — Refactored all game state access through `gameStore` instead of a local `games` object:
+- All handlers are now `async` to support Redis round-trips
+- Finished games are evicted from the store via `gameStore.deleteGame()`
+- Removed the 5-minute cleanup interval (Redis TTL handles expiry)
+- Removed the exported `games` object (no longer needed)
+
+**`server.js`** — Initializes the game store on startup and wires up `@socket.io/redis-adapter` for cross-process room broadcasts when Redis is available.
+
+**Backward compatible:** Without `REDIS_URL`, the app falls back to in-memory storage and behaves identically to before.
+
 ## Bugs Found & Resolved
 
 **1. Multiplayer refresh sends join instead of rejoin**
@@ -191,12 +212,12 @@ Deployed on **Railway** with auto-deploy from GitHub on push.
 
 ## Scaling
 
-Currently the game runs on a single Node.js process, which comfortably handles tens of thousands of concurrent Socket.IO connections. Horizontal scaling (multiple server instances) would require two changes:
+The game runs on a single Node.js process by default. Horizontal scaling (multiple server instances) is now supported via two mechanisms:
 
-1. **Redis adapter for Socket.IO** — Bridges room broadcasts across instances via pub/sub, so a `io.to(gameId).emit()` on server A reaches sockets on server B.
-2. **Shared game state** — The in-memory `games` map is per-process. With multiple instances, game state would need to move to Redis or a shared database, otherwise players on different servers read/write different objects.
+1. **Redis adapter for Socket.IO** — Bridges room broadcasts across instances via pub/sub, so a `io.to(gameId).emit()` on server A reaches sockets on server B. Enabled automatically when `REDIS_URL` is set.
+2. **Redis game state store** — The `gameStore` module caches live game state in Redis with a 1-hour TTL, falling back to in-memory and then SQLite. Ephemeral per-process state (socket IDs, ready flags) is kept in a separate in-memory map.
 
-Neither is needed at current scale. A single Railway instance will hit SQLite write throughput limits long before Socket.IO connection limits. This becomes relevant only with thousands of concurrent games or zero-downtime deploy requirements.
+Without `REDIS_URL`, the app falls back to in-memory storage and behaves as a single-process server. A single Railway instance will hit SQLite write throughput limits long before Socket.IO connection limits.
 
 ## Next Steps
 
