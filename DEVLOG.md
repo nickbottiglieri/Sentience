@@ -86,6 +86,17 @@ Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This make
 - Serialization: only persists occupied/shot entries, not entire n² grid
 - Client still receives dense arrays (converted server-side) — no frontend changes needed
 
+## Customer Experience
+
+- **Ship placement reset:** Reset button lets players clear all ships and start placement over without refreshing the page.
+- **One-click invite sharing:** Copy button on the multiplayer link copies the URL to clipboard with visual "✅ Copied" feedback.
+- **Ship placement preview:** Hovering over the board shows a ghost preview of where the ship will land, with red highlighting for invalid positions.
+- **Keyboard shortcut:** Press R to rotate ships during placement — faster than clicking a button.
+- **Auto-join from URL:** Opening a `?join=` link skips the menu and drops the player straight into the game.
+- **Refresh resilience:** Players can reload the page mid-game without losing progress — sessionStorage + server-side state handles seamless reconnection.
+- **Real-time feedback:** Hit/miss/sunk results appear instantly on both players' boards with emoji status messages (🔥 Hit, 🌊 Miss, 💥 Sunk).
+- **Game history:** Players can review completed games with date, mode, winner, and move count.
+
 ## Runtime Complexity
 
 Let `n` = board dimension, `s` = number of ships, `c` = total ship cells, `t` = shots taken so far.
