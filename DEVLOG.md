@@ -120,11 +120,18 @@ Deployed on **Railway** with auto-deploy from GitHub on push.
 - **Vercel** — Serverless-first, not a natural fit for a long-lived WebSocket server. Would require architectural changes.
 - **EC2 / self-hosted** — Full control but unnecessary ops overhead for a hackathon project.
 
+## Scaling
+
+Currently the game runs on a single Node.js process, which comfortably handles tens of thousands of concurrent Socket.IO connections. Horizontal scaling (multiple server instances) would require two changes:
+
+1. **Redis adapter for Socket.IO** — Bridges room broadcasts across instances via pub/sub, so a `io.to(gameId).emit()` on server A reaches sockets on server B.
+2. **Shared game state** — The in-memory `games` map is per-process. With multiple instances, game state would need to move to Redis or a shared database, otherwise players on different servers read/write different objects.
+
+Neither is needed at current scale. A single Railway instance will hit SQLite write throughput limits long before Socket.IO connection limits. This becomes relevant only with thousands of concurrent games or zero-downtime deploy requirements.
+
 ## Next Steps
 
-- Redis adapter for Socket.IO (horizontal scaling)
 - Graceful shutdown with connection draining
-- Rate limiting on WebSocket events
 - Player reconnection with grace period
 - Health check / readiness endpoints
 - Structured logging
