@@ -107,6 +107,9 @@ When a player clicked "← Menu" mid-game, the client cleared sessionStorage but
 - **Refresh resilience:** Players can reload the page mid-game without losing progress — sessionStorage + server-side state handles seamless reconnection.
 - **Real-time feedback:** Hit/miss/sunk results appear instantly on both players' boards with emoji status messages (🔥 Hit, 🌊 Miss, 💥 Sunk).
 - **Game history:** Players can review completed games with date, mode, winner, and move count.
+- **Forfeit protection:** Starting a new game while one is active shows a confirmation warning. Players can forfeit or return to their existing game.
+- **Return to game:** A persistent "↩ Return to Game" button appears on the menu when a game is in progress, making it easy to navigate back.
+- **Opponent notification on forfeit:** When a player forfeits, their opponent immediately sees a win screen — no silent abandonment.
 
 ## Runtime Complexity
 
