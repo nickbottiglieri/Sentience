@@ -50,6 +50,46 @@ Implemented multiplayer via Socket.IO rooms:
 - Added `.prettierrc` for consistent formatting
 - Updated README with architecture docs, scalability notes, and anti-cheat design
 
+### Step 7 — Modularization
+
+Refactored monolithic `server.js` into separate modules:
+
+- `src/db.js` — database init + prepared statements
+- `src/game.js` — board/ship logic, shot processing, serialization
+- `src/ai.js` — AI placement + hunt/target strategy
+- `src/routes.js` — REST API endpoints
+- `src/socketHandlers.js` — Socket.IO event handlers
+
+Server.js is now a thin bootstrap (~18 lines) that wires everything together.
+
+### Step 8 — Session Token Security
+
+Added crypto-random session tokens to prevent socket impersonation:
+
+- Token generated on game create and join, sent to client
+- Client stores token in `sessionStorage`, sends it back on rejoin
+- Server validates token before allowing reconnection
+- Tokens persisted to SQLite so they survive server restarts
+
+### Step 9 — Multiplayer Rejoin Bugfix
+
+Fixed a bug where refreshing a multiplayer tab with a `?join=` URL param would re-emit `join-game` instead of `rejoin`, causing the server to reject with "Game is full". Session rejoin now takes priority over URL params.
+
+## Security
+
+### What's Protected
+
+- **Server-authoritative logic:** All game state lives server-side. Clients never receive opponent ship positions.
+- **Shot validation:** Server rejects duplicate shots, out-of-turn firing, and out-of-bounds coordinates.
+- **Placement validation:** Server validates ship placement (no overlaps, within bounds) before accepting.
+- **Session tokens:** Crypto-random tokens prevent socket impersonation and reconnect hijacking. A malicious client cannot rejoin as another player without their token.
+
+### Remaining Vectors
+
+- **Rate limiting:** No throttle on WebSocket events — rapid-fire requests are possible.
+- **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking info over many observations.
+- **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens.
+
 ## Deployment
 
 Deployed on **Railway** with auto-deploy from GitHub on push.
