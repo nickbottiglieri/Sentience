@@ -9,13 +9,11 @@ const SHIPS = [
 ];
 const BOARD_SIZE = 10;
 
-function createBoard() {
-  return Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
-}
+const key = (x, y) => `${x},${y}`;
 
 function validatePlacement(ships) {
   if (!Array.isArray(ships) || ships.length !== SHIPS.length) return false;
-  const board = createBoard();
+  const occupied = new Set();
   for (let i = 0; i < ships.length; i++) {
     const { x, y, horizontal } = ships[i];
     const size = SHIPS[i].size;
@@ -23,33 +21,38 @@ function validatePlacement(ships) {
       const cx = horizontal ? x + j : x;
       const cy = horizontal ? y : y + j;
       if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE) return false;
-      if (board[cy][cx] !== null) return false;
-      board[cy][cx] = i;
+      const k = key(cx, cy);
+      if (occupied.has(k)) return false;
+      occupied.add(k);
     }
   }
   return true;
 }
 
-function buildShipBoard(ships) {
-  const board = createBoard();
+// Sparse board: Map of "x,y" -> shipIndex
+function buildShipMap(ships) {
+  const map = new Map();
   ships.forEach((ship, i) => {
     const size = SHIPS[i].size;
     for (let j = 0; j < size; j++) {
       const cx = ship.horizontal ? ship.x + j : ship.x;
       const cy = ship.horizontal ? ship.y : ship.y + j;
-      board[cy][cx] = i;
+      map.set(key(cx, cy), i);
     }
   });
-  return board;
+  return map;
 }
+
+// Sparse shots: Map of "x,y" -> "hit"|"miss"
+function createShotMap() { return new Map(); }
 
 function serializeGame(game) {
   return {
     phase: game.phase, turn: game.turn, ships: game.ships,
-    boards: game.boards, shots: game.shots, hits: game.hits,
-    turnCount: game.turnCount, winner: game.winner,
-    aiState: game.aiState || null, mode: game.mode,
-    tokens: game.tokens || null,
+    boards: { p1: game.boards.p1 ? [...game.boards.p1] : null, p2: game.boards.p2 ? [...game.boards.p2] : null },
+    shots: { p1: [...game.shots.p1], p2: [...game.shots.p2] },
+    hits: game.hits, turnCount: game.turnCount, winner: game.winner,
+    aiState: game.aiState || null, mode: game.mode, tokens: game.tokens || null,
   };
 }
 
@@ -58,8 +61,9 @@ function restoreGame(row) {
   return {
     id: row.id, mode: row.mode || state.mode,
     phase: state.phase, turn: state.turn, ships: state.ships,
-    boards: state.boards, shots: state.shots, hits: state.hits,
-    turnCount: state.turnCount || 0, winner: state.winner,
+    boards: { p1: state.boards.p1 ? new Map(state.boards.p1) : null, p2: state.boards.p2 ? new Map(state.boards.p2) : null },
+    shots: { p1: new Map(state.shots.p1), p2: new Map(state.shots.p2) },
+    hits: state.hits, turnCount: state.turnCount || 0, winner: state.winner,
     aiState: state.aiState || null, sockets: {}, ready: {},
     tokens: state.tokens || {},
   };
@@ -68,21 +72,22 @@ function restoreGame(row) {
 function processShot(game, player, x, y) {
   const opponent = player === 'p1' ? 'p2' : 'p1';
   const opBoard = game.boards[opponent];
-  const shotBoard = game.shots[player];
+  const shotMap = game.shots[player];
+  const k = key(x, y);
 
   if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return { error: 'Out of bounds' };
-  if (shotBoard[y][x] !== null) return { error: 'Already fired there' };
+  if (shotMap.has(k)) return { error: 'Already fired there' };
 
-  const cell = opBoard[y][x];
+  const cell = opBoard.get(k);
   let result, sunk = null;
 
-  if (cell !== null) {
-    shotBoard[y][x] = 'hit';
+  if (cell !== undefined) {
+    shotMap.set(k, 'hit');
     result = 'hit';
     game.hits[player][cell] = (game.hits[player][cell] || 0) + 1;
     if (game.hits[player][cell] === SHIPS[cell].size) sunk = SHIPS[cell].name;
   } else {
-    shotBoard[y][x] = 'miss';
+    shotMap.set(k, 'miss');
     result = 'miss';
   }
 
@@ -103,6 +108,6 @@ function processShot(game, player, x, y) {
 }
 
 module.exports = {
-  SHIPS, BOARD_SIZE, createBoard, validatePlacement,
-  buildShipBoard, serializeGame, restoreGame, processShot,
+  SHIPS, BOARD_SIZE, key, validatePlacement,
+  buildShipMap, createShotMap, serializeGame, restoreGame, processShot,
 };

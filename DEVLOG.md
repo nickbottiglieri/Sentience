@@ -75,6 +75,34 @@ Added crypto-random session tokens to prevent socket impersonation:
 
 Fixed a bug where refreshing a multiplayer tab with a `?join=` URL param would re-emit `join-game` instead of `rejoin`, causing the server to reject with "Game is full". Session rejoin now takes priority over URL params.
 
+### Step 10 — Sparse Data Structures for Scalable Board Size
+
+Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This makes the game scale to arbitrarily large boards without memory or performance degradation.
+
+- Ship boards: `Map<"x,y", shipIndex>` instead of `Array[y][x]`
+- Shot tracking: `Map<"x,y", "hit"|"miss">` instead of `Array[y][x]`
+- AI hunt mode: pre-shuffled candidate pool with O(1) pop instead of O(n²) scan per turn
+- AI placement: Set-based collision check instead of dense board allocation
+- Serialization: only persists occupied/shot entries, not entire n² grid
+- Client still receives dense arrays (converted server-side) — no frontend changes needed
+
+## Runtime Complexity
+
+Let `n` = board dimension, `s` = number of ships, `c` = total ship cells, `t` = shots taken so far.
+
+| Operation | Before (dense) | After (sparse) |
+|---|---|---|
+| Board creation | O(n²) | O(c) |
+| Shot lookup/write | O(1) | O(1) |
+| Placement validation | O(c) | O(c) |
+| processShot | O(s) for sunk check | O(s) for sunk check |
+| AI hunt (per turn) | O(n²) scan | O(1) pop from pool |
+| AI target mode | O(1) | O(1) |
+| Serialization | O(n²) per board | O(c + t) |
+| Memory per game | O(n²) | O(c + t) |
+
+For a 10×10 board the difference is negligible. For a 10,000×10,000 board, dense representation would require ~400M array cells (~3.2GB) per game; sparse uses only the cells that matter.
+
 ## Security
 
 ### What's Protected

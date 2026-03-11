@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { stmts } = require('./db');
-const { createBoard, validatePlacement, buildShipBoard, serializeGame, restoreGame, processShot } = require('./game');
+const { BOARD_SIZE, createShotMap, validatePlacement, buildShipMap, serializeGame, restoreGame, processShot } = require('./game');
 const { aiPlaceShips, aiTakeTurn } = require('./ai');
 
 function generateToken() { return crypto.randomBytes(24).toString('hex'); }
@@ -9,6 +9,16 @@ function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 const games = {};
 
 const RATE_LIMIT = { maxPerSec: 5 };
+
+// Convert sparse shot Map to dense 2D array for client rendering
+function shotMapToArray(map) {
+  const arr = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+  for (const [k, v] of map) {
+    const [x, y] = k.split(',').map(Number);
+    arr[y][x] = v;
+  }
+  return arr;
+}
 
 function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
@@ -28,8 +38,8 @@ function registerSocketHandlers(io) {
       const aiShips = aiPlaceShips();
       const game = {
         id, mode: 'ai', phase: 'placement', turn: 'p1',
-        ships: { p1: null, p2: aiShips }, boards: { p1: null, p2: buildShipBoard(aiShips) },
-        shots: { p1: createBoard(), p2: createBoard() }, hits: { p1: {}, p2: {} },
+        ships: { p1: null, p2: aiShips }, boards: { p1: null, p2: buildShipMap(aiShips) },
+        shots: { p1: createShotMap(), p2: createShotMap() }, hits: { p1: {}, p2: {} },
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {}, aiState: null,
         tokens: { p1: token },
       };
@@ -45,7 +55,7 @@ function registerSocketHandlers(io) {
       const game = {
         id, mode: 'mp', phase: 'placement', turn: 'p1',
         ships: { p1: null, p2: null }, boards: { p1: null, p2: null },
-        shots: { p1: createBoard(), p2: createBoard() }, hits: { p1: {}, p2: {} },
+        shots: { p1: createShotMap(), p2: createShotMap() }, hits: { p1: {}, p2: {} },
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {},
         tokens: { p1: token },
       };
@@ -89,7 +99,7 @@ function registerSocketHandlers(io) {
       const opponent = playerId === 'p1' ? 'p2' : 'p1';
       socket.emit('rejoin-state', {
         phase: game.phase, turn: game.turn, myShips: game.ships[playerId],
-        myShots: game.shots[playerId], incomingShots: game.shots[opponent],
+        myShots: shotMapToArray(game.shots[playerId]), incomingShots: shotMapToArray(game.shots[opponent]),
         winner: game.winner, mode: game.mode,
       });
     });
@@ -101,7 +111,7 @@ function registerSocketHandlers(io) {
       if (game.ships[pid]) return socket.emit('error-msg', 'Already placed');
       if (!validatePlacement(ships)) return socket.emit('error-msg', 'Invalid placement');
       game.ships[pid] = ships;
-      game.boards[pid] = buildShipBoard(ships);
+      game.boards[pid] = buildShipMap(ships);
       game.ready[pid] = true;
       socket.emit('ships-placed');
       const bothReady = game.mode === 'ai' ? game.ready.p1 : game.ready.p1 && game.ready.p2;
