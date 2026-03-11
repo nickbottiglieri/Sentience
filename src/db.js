@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, '..', 'battleship.db'));
+const db = new Database(process.env.DATABASE_PATH || path.join(__dirname, '..', 'battleship.db'));
 db.pragma('journal_mode = WAL');
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
