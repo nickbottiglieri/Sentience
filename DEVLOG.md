@@ -117,6 +117,16 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Backward compatible:** Without `REDIS_URL`, the app falls back to in-memory storage and behaves identically to before.
 
+### Step 12 — Unit Tests
+
+Added Jest test suite (28 tests) covering the three core modules:
+
+- **`game.js`** (15 tests) — placement validation, ship map construction, serialize/restore round-trip, processShot outcomes (hit/miss/sunk/win/duplicates/bounds), SQLite move recording
+- **`gameStore.js`** (6 tests) — save/get round-trip, unknown game returns null, delete, ephemeral socket state persistence across calls, SQLite fallback, socket cleanup on delete
+- **`ai.js`** (7 tests) — placement always valid and in-bounds, AI never fires same cell twice, stays in bounds, eventually sinks all ships, survives aiState serialization round-trip
+
+Also fixed a bug in `restoreShotMap`/`restoreBoardMap` where the sparse Map format `[["0,0","hit"]]` was misidentified as a legacy dense 2D array, corrupting game state on restore. Removed the legacy dense format paths entirely — only sparse Maps are supported now.
+
 ## Bugs Found & Resolved
 
 **1. Multiplayer refresh sends join instead of rejoin**

@@ -58,26 +58,11 @@ function serializeGame(game) {
 
 function restoreShotMap(data) {
   if (!data) return new Map();
-  // Old dense 2D array format
-  if (Array.isArray(data) && Array.isArray(data[0])) {
-    const map = new Map();
-    for (let y = 0; y < data.length; y++)
-      for (let x = 0; x < data[y].length; x++)
-        if (data[y][x] !== null) map.set(key(x, y), data[y][x]);
-    return map;
-  }
   return new Map(data);
 }
 
 function restoreBoardMap(data) {
   if (!data) return null;
-  if (Array.isArray(data) && Array.isArray(data[0])) {
-    const map = new Map();
-    for (let y = 0; y < data.length; y++)
-      for (let x = 0; x < data[y].length; x++)
-        if (data[y][x] !== null) map.set(key(x, y), data[y][x]);
-    return map;
-  }
   return new Map(data);
 }
 
