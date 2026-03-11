@@ -142,6 +142,17 @@ function registerSocketHandlers(io) {
       }
     });
 
+    socket.on('leave-game', ({ gameId, playerId }) => {
+      const game = games[gameId];
+      if (!game) return;
+      if (game.sockets[playerId] === socket.id) {
+        game.sockets[playerId] = null;
+      }
+      socket.leave(gameId);
+      socket.gameId = null;
+      socket.playerId = null;
+    });
+
     socket.on('disconnect', () => {});
   });
 }

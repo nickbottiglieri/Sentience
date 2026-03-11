@@ -474,8 +474,11 @@ function rematch() {
 function backToMenu() {
   document.getElementById('win-overlay').classList.add('hidden');
   document.getElementById('share-link').classList.add('hidden');
+  if (gameId) socket.emit('leave-game', { gameId, playerId });
   showScreen('menu-screen');
   phase = 'menu';
+  gameId = null;
+  playerId = null;
   sessionStorage.removeItem('gameId');
   sessionStorage.removeItem('playerId');
   sessionStorage.removeItem('sessionToken');
