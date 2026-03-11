@@ -49,6 +49,23 @@ h1 {
 .btn-secondary:hover {
   background: #546e7a;
 }
+.btn-danger {
+  background: #c62828;
+}
+.btn-danger:hover {
+  background: #e53935;
+}
+.btn-return {
+  background: #2e7d32;
+  animation: pulse-green 2s infinite;
+}
+.btn-return:hover {
+  background: #388e3c;
+}
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(46, 125, 50, 0); }
+}
 .btn-small {
   padding: 8px 16px;
   font-size: 0.85rem;

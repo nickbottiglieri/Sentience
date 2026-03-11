@@ -12,6 +12,7 @@
     <!-- Menu Screen -->
     <div id="menu-screen" class="screen active">
       <div class="menu-buttons">
+        <button class="btn btn-return hidden" id="return-btn" onclick="returnToGame()">↩ Return to Game</button>
         <button class="btn" onclick="startAI()">vs AI</button>
         <button class="btn" onclick="createMP()">Create Multiplayer</button>
         <button class="btn btn-secondary" onclick="showHistory()">
@@ -21,6 +22,16 @@
       <div id="join-section">
         <input id="join-input" placeholder="Paste game ID to join..." />
         <button class="btn btn-small" onclick="joinMP()">Join</button>
+      </div>
+    </div>
+
+    <!-- Forfeit Confirmation Overlay -->
+    <div id="forfeit-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>⚠️ Active Game</h2>
+        <p>You have a game in progress. Leaving will forfeit the match.</p>
+        <button class="btn" onclick="returnToGame()">↩ Return to Game</button>
+        <button class="btn btn-danger" onclick="confirmForfeit()">Forfeit & Leave</button>
       </div>
     </div>
 

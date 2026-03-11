@@ -142,12 +142,24 @@ function registerSocketHandlers(io) {
       }
     });
 
+    socket.on('forfeit', ({ gameId, playerId }) => {
+      const game = games[gameId];
+      if (!game || game.phase === 'finished') return;
+      const opponent = playerId === 'p1' ? 'p2' : 'p1';
+      game.winner = opponent;
+      game.phase = 'finished';
+      stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
+      io.to(game.id).emit('player-forfeited', { winner: opponent, forfeiter: playerId });
+      if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
+      socket.leave(gameId);
+      socket.gameId = null;
+      socket.playerId = null;
+    });
+
     socket.on('leave-game', ({ gameId, playerId }) => {
       const game = games[gameId];
       if (!game) return;
-      if (game.sockets[playerId] === socket.id) {
-        game.sockets[playerId] = null;
-      }
+      if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
       socket.leave(gameId);
       socket.gameId = null;
       socket.playerId = null;

@@ -435,33 +435,95 @@ socket.on(
   }
 );
 
+socket.on('player-forfeited', ({ winner, forfeiter }) => {
+  phase = 'finished';
+  const won = winner === playerId;
+  document.getElementById('win-text').textContent = won ? '🎉 Opponent Forfeited — You Win!' : '🏳️ You Forfeited';
+  document.getElementById('win-overlay').classList.remove('hidden');
+  sessionStorage.removeItem('gameId');
+  sessionStorage.removeItem('playerId');
+  sessionStorage.removeItem('sessionToken');
+});
+
 socket.on('error-msg', (msg) => setStatus(`⚠️ ${msg}`));
 
 // --- Actions ---
+let pendingAction = null;
+
+function hasActiveGame() {
+  return sessionStorage.getItem('gameId') && sessionStorage.getItem('playerId');
+}
+
+function updateReturnButton() {
+  const btn = document.getElementById('return-btn');
+  if (hasActiveGame()) btn.classList.remove('hidden');
+  else btn.classList.add('hidden');
+}
+
+function tryAction(action) {
+  if (hasActiveGame()) {
+    pendingAction = action;
+    document.getElementById('forfeit-overlay').classList.remove('hidden');
+    return;
+  }
+  action();
+}
+
+function returnToGame() {
+  document.getElementById('forfeit-overlay').classList.add('hidden');
+  pendingAction = null;
+  const savedGame = sessionStorage.getItem('gameId');
+  const savedPlayer = sessionStorage.getItem('playerId');
+  const token = sessionStorage.getItem('sessionToken');
+  if (savedGame && savedPlayer) {
+    gameId = savedGame;
+    playerId = savedPlayer;
+    socket.emit('rejoin', { gameId: savedGame, playerId: savedPlayer, token });
+  }
+}
+
+function confirmForfeit() {
+  document.getElementById('forfeit-overlay').classList.add('hidden');
+  if (gameId) socket.emit('forfeit', { gameId, playerId });
+  gameId = null;
+  playerId = null;
+  sessionStorage.removeItem('gameId');
+  sessionStorage.removeItem('playerId');
+  sessionStorage.removeItem('sessionToken');
+  updateReturnButton();
+  if (pendingAction) { pendingAction(); pendingAction = null; }
+}
+
 function startAI() {
-  gameMode = 'ai';
-  sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null;
-  incomingShotsBoard = null;
-  socket.emit('create-ai-game');
+  tryAction(() => {
+    gameMode = 'ai';
+    sunkShips = { me: new Set(), op: new Set() };
+    opShotsBoard = null;
+    incomingShotsBoard = null;
+    socket.emit('create-ai-game');
+  });
 }
 
 function createMP() {
-  gameMode = 'mp';
-  sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null;
-  incomingShotsBoard = null;
-  socket.emit('create-mp-game');
+  tryAction(() => {
+    gameMode = 'mp';
+    sunkShips = { me: new Set(), op: new Set() };
+    opShotsBoard = null;
+    incomingShotsBoard = null;
+    socket.emit('create-mp-game');
+  });
 }
 
 function joinMP() {
   const id = document.getElementById('join-input').value.trim();
   if (!id) return;
-  gameMode = 'mp';
-  sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null;
-  incomingShotsBoard = null;
-  socket.emit('join-game', { gameId: id });
+  tryAction(() => {
+    gameMode = 'mp';
+    sunkShips = { me: new Set(), op: new Set() };
+    opShotsBoard = null;
+    incomingShotsBoard = null;
+    socket.emit('join-game', { gameId: id });
+  });
 }
 
 function rematch() {
@@ -474,14 +536,16 @@ function rematch() {
 function backToMenu() {
   document.getElementById('win-overlay').classList.add('hidden');
   document.getElementById('share-link').classList.add('hidden');
-  if (gameId) socket.emit('leave-game', { gameId, playerId });
   showScreen('menu-screen');
+  if (phase === 'finished') {
+    gameId = null;
+    playerId = null;
+    sessionStorage.removeItem('gameId');
+    sessionStorage.removeItem('playerId');
+    sessionStorage.removeItem('sessionToken');
+  }
   phase = 'menu';
-  gameId = null;
-  playerId = null;
-  sessionStorage.removeItem('gameId');
-  sessionStorage.removeItem('playerId');
-  sessionStorage.removeItem('sessionToken');
+  updateReturnButton();
 }
 
 async function showHistory() {
@@ -504,6 +568,7 @@ async function showHistory() {
 
 // --- Auto-join from URL & refresh recovery ---
 window.addEventListener('load', () => {
+  updateReturnButton();
   // Try to rejoin after refresh (takes priority over ?join= URL param)
   const savedGame = sessionStorage.getItem('gameId');
   const savedPlayer = sessionStorage.getItem('playerId');
