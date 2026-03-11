@@ -435,6 +435,14 @@ socket.on(
   }
 );
 
+socket.on('player-disconnected', ({ playerId: pid }) => {
+  if (pid !== playerId) setStatus('⚠️ Opponent disconnected — they have 45s to reconnect...');
+});
+
+socket.on('player-reconnected', ({ playerId: pid }) => {
+  if (pid !== playerId) setStatus('✅ Opponent reconnected');
+});
+
 socket.on('player-forfeited', ({ winner, forfeiter }) => {
   phase = 'finished';
   const won = winner === playerId;

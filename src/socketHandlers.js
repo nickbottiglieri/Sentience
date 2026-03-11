@@ -7,8 +7,10 @@ const { aiPlaceShips, aiTakeTurn } = require('./ai');
 function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
 const games = {};
+const disconnectTimers = {}; // gameId:playerId -> timeout handle
 
 const RATE_LIMIT = { maxPerSec: 5 };
+const DISCONNECT_GRACE_MS = 45000;
 
 // Convert sparse shot Map to dense 2D array for client rendering
 function shotMapToArray(map) {
@@ -96,8 +98,12 @@ function registerSocketHandlers(io) {
       if (!game) return socket.emit('error-msg', 'Game not found');
       if (!game.tokens || game.tokens[playerId] !== token)
         return socket.emit('error-msg', 'Invalid session');
+      // Cancel disconnect grace timer
+      const timerKey = `${gameId}:${playerId}`;
+      if (disconnectTimers[timerKey]) { clearTimeout(disconnectTimers[timerKey]); delete disconnectTimers[timerKey]; }
       game.sockets[playerId] = socket.id;
       socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
+      io.to(gameId).emit('player-reconnected', { playerId });
       const opponent = playerId === 'p1' ? 'p2' : 'p1';
       socket.emit('rejoin-state', {
         phase: game.phase, turn: game.turn, myShips: game.ships[playerId],
@@ -165,8 +171,35 @@ function registerSocketHandlers(io) {
       socket.playerId = null;
     });
 
-    socket.on('disconnect', () => {});
+    socket.on('disconnect', () => {
+      const gid = socket.gameId;
+      const pid = socket.playerId;
+      if (!gid || !pid) return;
+      const game = games[gid];
+      if (!game || game.phase === 'finished') return;
+      if (game.mode === 'ai') return;
+      io.to(gid).emit('player-disconnected', { playerId: pid });
+      const timerKey = `${gid}:${pid}`;
+      disconnectTimers[timerKey] = setTimeout(() => {
+        delete disconnectTimers[timerKey];
+        const g = games[gid];
+        if (!g || g.phase === 'finished') return;
+        const opponent = pid === 'p1' ? 'p2' : 'p1';
+        g.winner = opponent;
+        g.phase = 'finished';
+        stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
+        io.to(g.id).emit('player-forfeited', { winner: opponent, forfeiter: pid });
+      }, DISCONNECT_GRACE_MS);
+    });
   });
+
+  // Cleanup finished/stale games from memory every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, game] of Object.entries(games)) {
+      if (game.phase === 'finished') delete games[id];
+    }
+  }, 5 * 60 * 1000);
 }
 
 module.exports = { registerSocketHandlers, games };
