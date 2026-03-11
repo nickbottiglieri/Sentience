@@ -1,7 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const { stmts } = require('./db');
 const { createBoard, validatePlacement, buildShipBoard, serializeGame, restoreGame, processShot } = require('./game');
 const { aiPlaceShips, aiTakeTurn } = require('./ai');
+
+function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
 const games = {};
 
@@ -9,31 +12,35 @@ function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
     socket.on('create-ai-game', () => {
       const id = uuidv4();
+      const token = generateToken();
       const aiShips = aiPlaceShips();
       const game = {
         id, mode: 'ai', phase: 'placement', turn: 'p1',
         ships: { p1: null, p2: aiShips }, boards: { p1: null, p2: buildShipBoard(aiShips) },
         shots: { p1: createBoard(), p2: createBoard() }, hits: { p1: {}, p2: {} },
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {}, aiState: null,
+        tokens: { p1: token },
       };
       games[id] = game;
       stmts.createGame.run(id, 'ai', JSON.stringify(serializeGame(game)));
       socket.join(id); socket.gameId = id; socket.playerId = 'p1';
-      socket.emit('game-created', { gameId: id, playerId: 'p1' });
+      socket.emit('game-created', { gameId: id, playerId: 'p1', token });
     });
 
     socket.on('create-mp-game', () => {
       const id = uuidv4();
+      const token = generateToken();
       const game = {
         id, mode: 'mp', phase: 'placement', turn: 'p1',
         ships: { p1: null, p2: null }, boards: { p1: null, p2: null },
         shots: { p1: createBoard(), p2: createBoard() }, hits: { p1: {}, p2: {} },
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {},
+        tokens: { p1: token },
       };
       games[id] = game;
       stmts.createGame.run(id, 'mp', JSON.stringify(serializeGame(game)));
       socket.join(id); socket.gameId = id; socket.playerId = 'p1';
-      socket.emit('game-created', { gameId: id, playerId: 'p1' });
+      socket.emit('game-created', { gameId: id, playerId: 'p1', token });
     });
 
     socket.on('join-game', ({ gameId }) => {
@@ -47,19 +54,24 @@ function registerSocketHandlers(io) {
       if (game.sockets.p1 && game.sockets.p2 && game.sockets.p1 !== socket.id && game.sockets.p2 !== socket.id)
         return socket.emit('error-msg', 'Game is full');
       const playerId = game.sockets.p1 ? 'p2' : 'p1';
+      const token = generateToken();
+      game.tokens = game.tokens || {};
+      game.tokens[playerId] = token;
       game.sockets[playerId] = socket.id;
       socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
-      socket.emit('game-joined', { gameId, playerId });
+      socket.emit('game-joined', { gameId, playerId, token });
       io.to(gameId).emit('player-joined', { playerId });
     });
 
-    socket.on('rejoin', ({ gameId, playerId }) => {
+    socket.on('rejoin', ({ gameId, playerId, token }) => {
       let game = games[gameId];
       if (!game) {
         const row = stmts.getGame.get(gameId);
         if (row && row.state) { game = restoreGame(row); games[gameId] = game; }
       }
       if (!game) return socket.emit('error-msg', 'Game not found');
+      if (!game.tokens || game.tokens[playerId] !== token)
+        return socket.emit('error-msg', 'Invalid session');
       game.sockets[playerId] = socket.id;
       socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
       const opponent = playerId === 'p1' ? 'p2' : 'p1';

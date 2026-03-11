@@ -49,6 +49,7 @@ function serializeGame(game) {
     boards: game.boards, shots: game.shots, hits: game.hits,
     turnCount: game.turnCount, winner: game.winner,
     aiState: game.aiState || null, mode: game.mode,
+    tokens: game.tokens || null,
   };
 }
 
@@ -60,6 +61,7 @@ function restoreGame(row) {
     boards: state.boards, shots: state.shots, hits: state.hits,
     turnCount: state.turnCount || 0, winner: state.winner,
     aiState: state.aiState || null, sockets: {}, ready: {},
+    tokens: state.tokens || {},
   };
 }
 

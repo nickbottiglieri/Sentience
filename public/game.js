@@ -289,11 +289,12 @@ function onFireClick(x, y) {
 }
 
 // --- Socket events ---
-socket.on('game-created', ({ gameId: gid, playerId: pid }) => {
+socket.on('game-created', ({ gameId: gid, playerId: pid, token }) => {
   gameId = gid;
   playerId = pid;
   sessionStorage.setItem('gameId', gid);
   sessionStorage.setItem('playerId', pid);
+  sessionStorage.setItem('sessionToken', token);
   showScreen('game-screen');
   if (gameMode === 'mp') {
     const link = `${location.origin}?join=${gid}`;
@@ -305,11 +306,12 @@ socket.on('game-created', ({ gameId: gid, playerId: pid }) => {
   startPlacement();
 });
 
-socket.on('game-joined', ({ gameId: gid, playerId: pid }) => {
+socket.on('game-joined', ({ gameId: gid, playerId: pid, token }) => {
   gameId = gid;
   playerId = pid;
   sessionStorage.setItem('gameId', gid);
   sessionStorage.setItem('playerId', pid);
+  sessionStorage.setItem('sessionToken', token);
   showScreen('game-screen');
   startPlacement();
 });
@@ -369,6 +371,7 @@ socket.on('shot-result', ({ player, x, y, result, sunk, winner }) => {
     document.getElementById('win-overlay').classList.remove('hidden');
     sessionStorage.removeItem('gameId');
     sessionStorage.removeItem('playerId');
+    sessionStorage.removeItem('sessionToken');
   } else {
     const nextTurn = player === 'p1' ? 'p2' : 'p1';
     updateTurnDisplay(nextTurn);
@@ -461,6 +464,7 @@ function backToMenu() {
   phase = 'menu';
   sessionStorage.removeItem('gameId');
   sessionStorage.removeItem('playerId');
+  sessionStorage.removeItem('sessionToken');
 }
 
 async function showHistory() {
@@ -496,6 +500,6 @@ window.addEventListener('load', () => {
   if (savedGame && savedPlayer) {
     gameId = savedGame;
     playerId = savedPlayer;
-    socket.emit('rejoin', { gameId: savedGame, playerId: savedPlayer });
+    socket.emit('rejoin', { gameId: savedGame, playerId: savedPlayer, token: sessionStorage.getItem('sessionToken') });
   }
 });
