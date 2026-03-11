@@ -487,19 +487,20 @@ async function showHistory() {
 
 // --- Auto-join from URL & refresh recovery ---
 window.addEventListener('load', () => {
-  const params = new URLSearchParams(location.search);
-  const joinId = params.get('join');
-  if (joinId) {
-    document.getElementById('join-input').value = joinId;
-    joinMP();
-    return;
-  }
-  // Try to rejoin after refresh
+  // Try to rejoin after refresh (takes priority over ?join= URL param)
   const savedGame = sessionStorage.getItem('gameId');
   const savedPlayer = sessionStorage.getItem('playerId');
   if (savedGame && savedPlayer) {
     gameId = savedGame;
     playerId = savedPlayer;
-    socket.emit('rejoin', { gameId: savedGame, playerId: savedPlayer, token: sessionStorage.getItem('sessionToken') });
+    const token = sessionStorage.getItem('sessionToken');
+    socket.emit('rejoin', { gameId: savedGame, playerId: savedPlayer, token });
+    return;
+  }
+  const params = new URLSearchParams(location.search);
+  const joinId = params.get('join');
+  if (joinId) {
+    document.getElementById('join-input').value = joinId;
+    joinMP();
   }
 });
