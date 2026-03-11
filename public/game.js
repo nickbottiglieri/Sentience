@@ -256,6 +256,13 @@ function clearPreview() {
 function rotateShip() {
   horizontal = !horizontal;
 }
+function resetPlacement() {
+  placementShips = new Array(SHIPS.length).fill(null);
+  currentShipIdx = 0;
+  horizontal = true;
+  renderMyBoard();
+  renderShipList();
+}
 document.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') rotateShip();
 });
@@ -289,6 +296,13 @@ function onFireClick(x, y) {
 }
 
 // --- Socket events ---
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅ Copied';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 1500);
+  });
+}
+
 socket.on('game-created', ({ gameId: gid, playerId: pid, token }) => {
   gameId = gid;
   playerId = pid;
@@ -299,7 +313,7 @@ socket.on('game-created', ({ gameId: gid, playerId: pid, token }) => {
   if (gameMode === 'mp') {
     const link = `${location.origin}?join=${gid}`;
     const el = document.getElementById('share-link');
-    el.innerHTML = `Share this link: <a href="${link}">${link}</a> (or ID: <code>${gid}</code>)`;
+    el.innerHTML = `Share this link: <a href="${link}">${link}</a> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">📋 Copy</button>`;
     el.classList.remove('hidden');
     setStatus('Waiting for opponent to join...');
   }

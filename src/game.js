@@ -56,13 +56,38 @@ function serializeGame(game) {
   };
 }
 
+function restoreShotMap(data) {
+  if (!data) return new Map();
+  // Old dense 2D array format
+  if (Array.isArray(data) && Array.isArray(data[0])) {
+    const map = new Map();
+    for (let y = 0; y < data.length; y++)
+      for (let x = 0; x < data[y].length; x++)
+        if (data[y][x] !== null) map.set(key(x, y), data[y][x]);
+    return map;
+  }
+  return new Map(data);
+}
+
+function restoreBoardMap(data) {
+  if (!data) return null;
+  if (Array.isArray(data) && Array.isArray(data[0])) {
+    const map = new Map();
+    for (let y = 0; y < data.length; y++)
+      for (let x = 0; x < data[y].length; x++)
+        if (data[y][x] !== null) map.set(key(x, y), data[y][x]);
+    return map;
+  }
+  return new Map(data);
+}
+
 function restoreGame(row) {
   const state = JSON.parse(row.state);
   return {
     id: row.id, mode: row.mode || state.mode,
     phase: state.phase, turn: state.turn, ships: state.ships,
-    boards: { p1: state.boards.p1 ? new Map(state.boards.p1) : null, p2: state.boards.p2 ? new Map(state.boards.p2) : null },
-    shots: { p1: new Map(state.shots.p1), p2: new Map(state.shots.p2) },
+    boards: { p1: restoreBoardMap(state.boards.p1), p2: restoreBoardMap(state.boards.p2) },
+    shots: { p1: restoreShotMap(state.shots.p1), p2: restoreShotMap(state.shots.p2) },
     hits: state.hits, turnCount: state.turnCount || 0, winner: state.winner,
     aiState: state.aiState || null, sockets: {}, ready: {},
     tokens: state.tokens || {},
