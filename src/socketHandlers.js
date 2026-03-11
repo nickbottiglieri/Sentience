@@ -8,8 +8,20 @@ function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
 const games = {};
 
+const RATE_LIMIT = { maxPerSec: 5 };
+
 function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
+    const rateBucket = { count: 0, resetAt: Date.now() + 1000 };
+    socket.use((packet, next) => {
+      const now = Date.now();
+      if (now > rateBucket.resetAt) { rateBucket.count = 0; rateBucket.resetAt = now + 1000; }
+      if (++rateBucket.count > RATE_LIMIT.maxPerSec) {
+        socket.emit('error-msg', 'Rate limited');
+        return socket.disconnect(true);
+      }
+      next();
+    });
     socket.on('create-ai-game', () => {
       const id = uuidv4();
       const token = generateToken();
