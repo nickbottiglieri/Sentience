@@ -1,70 +1,98 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Battleship</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <h1>⚓ Battleship</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Battleship</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>⚓ Battleship</h1>
 
-  <!-- Menu Screen -->
-  <div id="menu-screen" class="screen active">
-    <div class="menu-buttons">
-      <button class="btn" onclick="startAI()">vs AI</button>
-      <button class="btn" onclick="createMP()">Create Multiplayer</button>
-      <button class="btn btn-secondary" onclick="showHistory()">Game History</button>
-    </div>
-    <div id="join-section">
-      <input id="join-input" placeholder="Paste game ID to join...">
-      <button class="btn btn-small" onclick="joinMP()">Join</button>
-    </div>
-  </div>
-
-  <!-- Game Screen -->
-  <div id="game-screen" class="screen">
-    <div id="share-link" class="share-link hidden"></div>
-    <div id="status"></div>
-    <div id="placement-controls" class="placement-controls hidden">
-      <div class="ship-list" id="ship-list"></div>
-      <button class="btn btn-small" onclick="rotateShip()">Rotate (R)</button>
-      <button class="btn btn-small" id="confirm-btn" onclick="confirmPlacement()" disabled>Confirm All</button>
-    </div>
-    <div id="turn-indicator"></div>
-    <div class="game-area">
-      <div class="board-container">
-        <h3>Your Fleet</h3>
-        <div class="board" id="my-board"></div>
+    <!-- Menu Screen -->
+    <div id="menu-screen" class="screen active">
+      <div class="menu-buttons">
+        <button class="btn" onclick="startAI()">vs AI</button>
+        <button class="btn" onclick="createMP()">Create Multiplayer</button>
+        <button class="btn btn-secondary" onclick="showHistory()">
+          Game History
+        </button>
       </div>
-      <div class="board-container">
-        <h3>Opponent's Waters</h3>
-        <div class="board clickable" id="op-board"></div>
+      <div id="join-section">
+        <input id="join-input" placeholder="Paste game ID to join..." />
+        <button class="btn btn-small" onclick="joinMP()">Join</button>
       </div>
     </div>
-    <button class="btn btn-secondary btn-small" style="margin-top:20px" onclick="backToMenu()">← Menu</button>
-  </div>
 
-  <!-- History Screen -->
-  <div id="history-screen" class="screen">
-    <h2 style="color:#90caf9;margin-bottom:10px">Game History</h2>
-    <table class="history-table" id="history-table">
-      <thead><tr><th>Date</th><th>Mode</th><th>Winner</th><th>Moves</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <button class="btn btn-secondary btn-small" style="margin-top:10px" onclick="showScreen('menu-screen')">← Back</button>
-  </div>
-
-  <!-- Win Overlay -->
-  <div id="win-overlay" class="overlay hidden">
-    <div class="overlay-content">
-      <h2 id="win-text"></h2>
-      <button class="btn" onclick="rematch()">Rematch</button>
-      <button class="btn btn-secondary" onclick="backToMenu()">Menu</button>
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+      <div id="share-link" class="share-link hidden"></div>
+      <div id="status"></div>
+      <div id="placement-controls" class="placement-controls hidden">
+        <div class="ship-list" id="ship-list"></div>
+        <button class="btn btn-small" onclick="rotateShip()">Rotate (R)</button>
+        <button
+          class="btn btn-small"
+          id="confirm-btn"
+          onclick="confirmPlacement()"
+          disabled
+        >
+          Confirm All
+        </button>
+      </div>
+      <div id="turn-indicator"></div>
+      <div class="game-area">
+        <div class="board-container">
+          <h3>Your Fleet</h3>
+          <div class="board" id="my-board"></div>
+        </div>
+        <div class="board-container">
+          <h3>Opponent's Waters</h3>
+          <div class="board clickable" id="op-board"></div>
+        </div>
+      </div>
+      <button
+        class="btn btn-secondary btn-small"
+        style="margin-top: 20px"
+        onclick="backToMenu()"
+      >
+        ← Menu
+      </button>
     </div>
-  </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
-</body>
+    <!-- History Screen -->
+    <div id="history-screen" class="screen">
+      <h2 style="color: #90caf9; margin-bottom: 10px">Game History</h2>
+      <table class="history-table" id="history-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Mode</th>
+            <th>Winner</th>
+            <th>Moves</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button
+        class="btn btn-secondary btn-small"
+        style="margin-top: 10px"
+        onclick="showScreen('menu-screen')"
+      >
+        ← Back
+      </button>
+    </div>
+
+    <!-- Win Overlay -->
+    <div id="win-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 id="win-text"></h2>
+        <button class="btn" onclick="rematch()">Rematch</button>
+        <button class="btn btn-secondary" onclick="backToMenu()">Menu</button>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+  </body>
 </html>

@@ -38,13 +38,23 @@ db.exec(`
 `);
 
 const stmts = {
-  createGame: db.prepare('INSERT INTO games (id, mode, state) VALUES (?, ?, ?)'),
-  updateGame: db.prepare("UPDATE games SET state = ?, winner = ?, finished_at = datetime('now') WHERE id = ?"),
+  createGame: db.prepare(
+    'INSERT INTO games (id, mode, state) VALUES (?, ?, ?)'
+  ),
+  updateGame: db.prepare(
+    "UPDATE games SET state = ?, winner = ?, finished_at = datetime('now') WHERE id = ?"
+  ),
   saveState: db.prepare('UPDATE games SET state = ? WHERE id = ?'),
   getGame: db.prepare('SELECT * FROM games WHERE id = ?'),
-  insertMove: db.prepare('INSERT INTO moves (game_id, player, x, y, result, turn_number) VALUES (?, ?, ?, ?, ?, ?)'),
-  getHistory: db.prepare('SELECT g.id, g.mode, g.winner, g.created_at, g.finished_at, COUNT(m.id) as total_moves FROM games g LEFT JOIN moves m ON g.id = m.game_id WHERE g.winner IS NOT NULL GROUP BY g.id ORDER BY g.finished_at DESC LIMIT 50'),
-  getGameMoves: db.prepare('SELECT player, x, y, result, turn_number, created_at FROM moves WHERE game_id = ? ORDER BY turn_number'),
+  insertMove: db.prepare(
+    'INSERT INTO moves (game_id, player, x, y, result, turn_number) VALUES (?, ?, ?, ?, ?, ?)'
+  ),
+  getHistory: db.prepare(
+    'SELECT g.id, g.mode, g.winner, g.created_at, g.finished_at, COUNT(m.id) as total_moves FROM games g LEFT JOIN moves m ON g.id = m.game_id WHERE g.winner IS NOT NULL GROUP BY g.id ORDER BY g.finished_at DESC LIMIT 50'
+  ),
+  getGameMoves: db.prepare(
+    'SELECT player, x, y, result, turn_number, created_at FROM moves WHERE game_id = ? ORDER BY turn_number'
+  ),
 };
 
 // --- Game State ---
@@ -73,7 +83,8 @@ function validatePlacement(ships) {
     for (let j = 0; j < size; j++) {
       const cx = horizontal ? x + j : x;
       const cy = horizontal ? y : y + j;
-      if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE) return false;
+      if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE)
+        return false;
       if (board[cy][cx] !== null) return false;
       board[cy][cx] = i;
     }
@@ -99,11 +110,13 @@ function processShot(game, player, x, y) {
   const opBoard = game.boards[opponent];
   const shotBoard = game.shots[player];
 
-  if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return { error: 'Out of bounds' };
+  if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE)
+    return { error: 'Out of bounds' };
   if (shotBoard[y][x] !== null) return { error: 'Already fired there' };
 
   const cell = opBoard[y][x];
-  let result, sunk = null;
+  let result,
+    sunk = null;
 
   if (cell !== null) {
     shotBoard[y][x] = 'hit';
@@ -118,7 +131,14 @@ function processShot(game, player, x, y) {
   }
 
   game.turnCount++;
-  stmts.insertMove.run(game.id, player, x, y, sunk ? `sunk:${sunk}` : result, game.turnCount);
+  stmts.insertMove.run(
+    game.id,
+    player,
+    x,
+    y,
+    sunk ? `sunk:${sunk}` : result,
+    game.turnCount
+  );
 
   const allSunk = SHIPS.every((s, i) => game.hits[player][i] === s.size);
   if (allSunk) {
@@ -175,13 +195,22 @@ function aiPlaceShips() {
     let placed = false;
     while (!placed) {
       const horizontal = Math.random() < 0.5;
-      const x = Math.floor(Math.random() * (horizontal ? BOARD_SIZE - SHIPS[i].size + 1 : BOARD_SIZE));
-      const y = Math.floor(Math.random() * (horizontal ? BOARD_SIZE : BOARD_SIZE - SHIPS[i].size + 1));
+      const x = Math.floor(
+        Math.random() *
+          (horizontal ? BOARD_SIZE - SHIPS[i].size + 1 : BOARD_SIZE)
+      );
+      const y = Math.floor(
+        Math.random() *
+          (horizontal ? BOARD_SIZE : BOARD_SIZE - SHIPS[i].size + 1)
+      );
       let ok = true;
       for (let j = 0; j < SHIPS[i].size; j++) {
         const cx = horizontal ? x + j : x;
         const cy = horizontal ? y : y + j;
-        if (board[cy][cx] !== null) { ok = false; break; }
+        if (board[cy][cx] !== null) {
+          ok = false;
+          break;
+        }
       }
       if (ok) {
         for (let j = 0; j < SHIPS[i].size; j++) {
@@ -198,7 +227,8 @@ function aiPlaceShips() {
 }
 
 function aiTakeTurn(game) {
-  if (!game.aiState) game.aiState = { mode: 'hunt', targets: [], tried: new Set() };
+  if (!game.aiState)
+    game.aiState = { mode: 'hunt', targets: [], tried: new Set() };
   const state = game.aiState;
   // Rebuild tried set from shots board
   if (!(state.tried instanceof Set)) {
@@ -212,7 +242,11 @@ function aiTakeTurn(game) {
   if (state.mode === 'target' && state.targets.length > 0) {
     while (state.targets.length > 0) {
       const t = state.targets.shift();
-      if (!state.tried.has(`${t.x},${t.y}`)) { x = t.x; y = t.y; break; }
+      if (!state.tried.has(`${t.x},${t.y}`)) {
+        x = t.x;
+        y = t.y;
+        break;
+      }
     }
     if (x === undefined) state.mode = 'hunt';
   }
@@ -222,14 +256,17 @@ function aiTakeTurn(game) {
     const candidates = [];
     for (let cy = 0; cy < BOARD_SIZE; cy++)
       for (let cx = 0; cx < BOARD_SIZE; cx++)
-        if ((cx + cy) % 2 === 0 && !state.tried.has(`${cx},${cy}`)) candidates.push({ x: cx, y: cy });
+        if ((cx + cy) % 2 === 0 && !state.tried.has(`${cx},${cy}`))
+          candidates.push({ x: cx, y: cy });
     if (candidates.length === 0) {
       for (let cy = 0; cy < BOARD_SIZE; cy++)
         for (let cx = 0; cx < BOARD_SIZE; cx++)
-          if (!state.tried.has(`${cx},${cy}`)) candidates.push({ x: cx, y: cy });
+          if (!state.tried.has(`${cx},${cy}`))
+            candidates.push({ x: cx, y: cy });
     }
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
-    x = pick.x; y = pick.y;
+    x = pick.x;
+    y = pick.y;
   }
 
   state.tried.add(`${x},${y}`);
@@ -237,9 +274,21 @@ function aiTakeTurn(game) {
 
   if (result.result === 'hit' && !result.sunk) {
     state.mode = 'target';
-    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-      const nx = x + dx, ny = y + dy;
-      if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && !state.tried.has(`${nx},${ny}`))
+    for (const [dx, dy] of [
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+    ]) {
+      const nx = x + dx,
+        ny = y + dy;
+      if (
+        nx >= 0 &&
+        nx < BOARD_SIZE &&
+        ny >= 0 &&
+        ny < BOARD_SIZE &&
+        !state.tried.has(`${nx},${ny}`)
+      )
         state.targets.push({ x: nx, y: ny });
     }
   }
@@ -247,13 +296,20 @@ function aiTakeTurn(game) {
     state.targets = [];
     // Check if there are still outstanding hits without sinks
     const totalHits = Object.values(game.hits.p2).reduce((a, b) => a + b, 0);
-    const totalSunkCells = SHIPS.reduce((a, s, i) => a + (game.hits.p2[i] === s.size ? s.size : 0), 0);
+    const totalSunkCells = SHIPS.reduce(
+      (a, s, i) => a + (game.hits.p2[i] === s.size ? s.size : 0),
+      0
+    );
     if (totalHits > totalSunkCells) state.mode = 'target';
     else state.mode = 'hunt';
   }
 
   // Serialize tried set for persistence
-  game.aiState = { mode: state.mode, targets: state.targets, tried: [...state.tried] };
+  game.aiState = {
+    mode: state.mode,
+    targets: state.targets,
+    tried: [...state.tried],
+  };
   stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
 
   return { x, y, ...result };
@@ -265,11 +321,19 @@ io.on('connection', (socket) => {
   socket.on('create-ai-game', () => {
     const id = uuidv4();
     const game = {
-      id, mode: 'ai', phase: 'placement', turn: 'p1',
-      ships: { p1: null, p2: null }, boards: { p1: null, p2: null },
+      id,
+      mode: 'ai',
+      phase: 'placement',
+      turn: 'p1',
+      ships: { p1: null, p2: null },
+      boards: { p1: null, p2: null },
       shots: { p1: createBoard(), p2: createBoard() },
-      hits: { p1: {}, p2: {} }, turnCount: 0, winner: null,
-      sockets: { p1: socket.id }, ready: {}, aiState: null,
+      hits: { p1: {}, p2: {} },
+      turnCount: 0,
+      winner: null,
+      sockets: { p1: socket.id },
+      ready: {},
+      aiState: null,
     };
     // AI places ships immediately
     const aiShips = aiPlaceShips();
@@ -288,11 +352,18 @@ io.on('connection', (socket) => {
   socket.on('create-mp-game', () => {
     const id = uuidv4();
     const game = {
-      id, mode: 'mp', phase: 'placement', turn: 'p1',
-      ships: { p1: null, p2: null }, boards: { p1: null, p2: null },
+      id,
+      mode: 'mp',
+      phase: 'placement',
+      turn: 'p1',
+      ships: { p1: null, p2: null },
+      boards: { p1: null, p2: null },
       shots: { p1: createBoard(), p2: createBoard() },
-      hits: { p1: {}, p2: {} }, turnCount: 0, winner: null,
-      sockets: { p1: socket.id }, ready: {},
+      hits: { p1: {}, p2: {} },
+      turnCount: 0,
+      winner: null,
+      sockets: { p1: socket.id },
+      ready: {},
     };
     games[id] = game;
     stmts.createGame.run(id, 'mp', JSON.stringify(serializeGame(game)));
@@ -313,8 +384,14 @@ io.on('connection', (socket) => {
       }
     }
     if (!game) return socket.emit('error-msg', 'Game not found');
-    if (game.mode !== 'mp') return socket.emit('error-msg', 'Not a multiplayer game');
-    if (game.sockets.p1 && game.sockets.p2 && game.sockets.p1 !== socket.id && game.sockets.p2 !== socket.id)
+    if (game.mode !== 'mp')
+      return socket.emit('error-msg', 'Not a multiplayer game');
+    if (
+      game.sockets.p1 &&
+      game.sockets.p2 &&
+      game.sockets.p1 !== socket.id &&
+      game.sockets.p2 !== socket.id
+    )
       return socket.emit('error-msg', 'Game is full');
 
     const playerId = game.sockets.p1 ? 'p2' : 'p1';
@@ -365,16 +442,16 @@ io.on('connection', (socket) => {
     if (!game || game.phase !== 'placement') return;
     const pid = socket.playerId;
     if (game.ships[pid]) return socket.emit('error-msg', 'Already placed');
-    if (!validatePlacement(ships)) return socket.emit('error-msg', 'Invalid placement');
+    if (!validatePlacement(ships))
+      return socket.emit('error-msg', 'Invalid placement');
 
     game.ships[pid] = ships;
     game.boards[pid] = buildShipBoard(ships);
     game.ready[pid] = true;
     socket.emit('ships-placed');
 
-    const bothReady = game.mode === 'ai'
-      ? game.ready.p1
-      : game.ready.p1 && game.ready.p2;
+    const bothReady =
+      game.mode === 'ai' ? game.ready.p1 : game.ready.p1 && game.ready.p2;
 
     if (bothReady) {
       game.phase = 'firing';
@@ -396,13 +473,27 @@ io.on('connection', (socket) => {
     const result = processShot(game, pid, x, y);
     if (result.error) return socket.emit('error-msg', result.error);
 
-    io.to(game.id).emit('shot-result', { player: pid, x, y, result: result.result, sunk: result.sunk, winner: result.winner });
+    io.to(game.id).emit('shot-result', {
+      player: pid,
+      x,
+      y,
+      result: result.result,
+      sunk: result.sunk,
+      winner: result.winner,
+    });
 
     // AI turn
     if (!result.winner && game.mode === 'ai' && game.turn === 'p2') {
       setTimeout(() => {
         const aiResult = aiTakeTurn(game);
-        io.to(game.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
+        io.to(game.id).emit('shot-result', {
+          player: 'p2',
+          x: aiResult.x,
+          y: aiResult.y,
+          result: aiResult.result,
+          sunk: aiResult.sunk,
+          winner: aiResult.winner,
+        });
       }, 500);
     }
   });
@@ -422,4 +513,6 @@ app.get('/api/history/:id', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Battleship running on http://localhost:${PORT}`));
+server.listen(PORT, () =>
+  console.log(`Battleship running on http://localhost:${PORT}`)
+);

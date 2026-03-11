@@ -9,7 +9,9 @@ const SHIPS = [
 const BOARD_SIZE = 10;
 const COLS = 'ABCDEFGHIJ';
 
-let gameId = null, playerId = null, gameMode = null;
+let gameId = null,
+  playerId = null,
+  gameMode = null;
 let phase = 'menu';
 let placementShips = []; // {x, y, horizontal} per ship index
 let currentShipIdx = 0;
@@ -19,26 +21,44 @@ let sunkShips = { me: new Set(), op: new Set() };
 
 // --- Screen management ---
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document
+    .querySelectorAll('.screen')
+    .forEach((s) => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
-function setStatus(msg) { document.getElementById('status').textContent = msg; }
-function setTurn(msg) { document.getElementById('turn-indicator').textContent = msg; }
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+function setTurn(msg) {
+  document.getElementById('turn-indicator').textContent = msg;
+}
 
 // --- Board rendering ---
 function createBoardDOM(containerId, onClick) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
   // Corner
-  el.appendChild(Object.assign(document.createElement('div'), { className: 'label' }));
+  el.appendChild(
+    Object.assign(document.createElement('div'), { className: 'label' })
+  );
   // Column headers
   for (let x = 0; x < BOARD_SIZE; x++) {
-    el.appendChild(Object.assign(document.createElement('div'), { className: 'label', textContent: COLS[x] }));
+    el.appendChild(
+      Object.assign(document.createElement('div'), {
+        className: 'label',
+        textContent: COLS[x],
+      })
+    );
   }
   for (let y = 0; y < BOARD_SIZE; y++) {
     // Row label
-    el.appendChild(Object.assign(document.createElement('div'), { className: 'label', textContent: y + 1 }));
+    el.appendChild(
+      Object.assign(document.createElement('div'), {
+        className: 'label',
+        textContent: y + 1,
+      })
+    );
     for (let x = 0; x < BOARD_SIZE; x++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
@@ -94,8 +114,10 @@ function renderMyBoardFiring(incomingShots) {
   if (incomingShots) {
     for (let y2 = 0; y2 < BOARD_SIZE; y2++) {
       for (let x2 = 0; x2 < BOARD_SIZE; x2++) {
-        if (incomingShots[y2][x2] === 'hit') getCell('my-board', x2, y2).classList.add('hit');
-        else if (incomingShots[y2][x2] === 'miss') getCell('my-board', x2, y2).classList.add('miss');
+        if (incomingShots[y2][x2] === 'hit')
+          getCell('my-board', x2, y2).classList.add('hit');
+        else if (incomingShots[y2][x2] === 'miss')
+          getCell('my-board', x2, y2).classList.add('miss');
       }
     }
   }
@@ -116,7 +138,7 @@ function renderOpBoard() {
     }
   }
   // Mark sunk ships
-  sunkShips.op.forEach(name => {
+  sunkShips.op.forEach((name) => {
     // We don't know exact positions of sunk opponent ships, just color existing hits
   });
 }
@@ -140,18 +162,29 @@ function renderShipList() {
   list.innerHTML = '';
   SHIPS.forEach((s, i) => {
     const tag = document.createElement('div');
-    tag.className = 'ship-tag' + (i === currentShipIdx ? ' current' : '') + (placementShips[i] ? ' placed' : '');
+    tag.className =
+      'ship-tag' +
+      (i === currentShipIdx ? ' current' : '') +
+      (placementShips[i] ? ' placed' : '');
     tag.textContent = `${s.name} (${s.size})`;
     tag.style.cursor = 'pointer';
-    tag.addEventListener('click', () => { currentShipIdx = i; renderShipList(); renderMyBoard(); });
+    tag.addEventListener('click', () => {
+      currentShipIdx = i;
+      renderShipList();
+      renderMyBoard();
+    });
     list.appendChild(tag);
   });
-  document.getElementById('confirm-btn').disabled = placementShips.some(s => s === null);
+  document.getElementById('confirm-btn').disabled = placementShips.some(
+    (s) => s === null
+  );
 }
 
 function isValidPlacement(ships, idx, x, y, horiz) {
   const size = SHIPS[idx].size;
-  const tempBoard = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+  const tempBoard = Array.from({ length: BOARD_SIZE }, () =>
+    Array(BOARD_SIZE).fill(null)
+  );
   ships.forEach((s, i) => {
     if (!s || i === idx) return;
     for (let j = 0; j < SHIPS[i].size; j++) {
@@ -175,10 +208,12 @@ function onPlacementClick(x, y) {
     placementShips[currentShipIdx] = { x, y, horizontal };
     renderMyBoard();
     // Auto-advance to next unplaced ship
-    const next = placementShips.findIndex((s, i) => s === null && i > currentShipIdx);
+    const next = placementShips.findIndex(
+      (s, i) => s === null && i > currentShipIdx
+    );
     if (next !== -1) currentShipIdx = next;
     else {
-      const first = placementShips.findIndex(s => s === null);
+      const first = placementShips.findIndex((s) => s === null);
       if (first !== -1) currentShipIdx = first;
     }
     renderShipList();
@@ -189,29 +224,44 @@ function onPlacementClick(x, y) {
 document.getElementById('my-board').addEventListener('mouseover', (e) => {
   if (phase !== 'placement' || !e.target.dataset.x) return;
   clearPreview();
-  const x = +e.target.dataset.x, y = +e.target.dataset.y;
-  const valid = isValidPlacement(placementShips, currentShipIdx, x, y, horizontal);
+  const x = +e.target.dataset.x,
+    y = +e.target.dataset.y;
+  const valid = isValidPlacement(
+    placementShips,
+    currentShipIdx,
+    x,
+    y,
+    horizontal
+  );
   for (let j = 0; j < SHIPS[currentShipIdx].size; j++) {
     const cx = horizontal ? x + j : x;
     const cy = horizontal ? y : y + j;
     if (cx >= 0 && cx < BOARD_SIZE && cy >= 0 && cy < BOARD_SIZE) {
-      getCell('my-board', cx, cy).classList.add(valid ? 'preview' : 'preview-invalid');
+      getCell('my-board', cx, cy).classList.add(
+        valid ? 'preview' : 'preview-invalid'
+      );
     }
   }
 });
 document.getElementById('my-board').addEventListener('mouseout', clearPreview);
 
 function clearPreview() {
-  document.querySelectorAll('#my-board .preview, #my-board .preview-invalid').forEach(c => {
-    c.classList.remove('preview', 'preview-invalid');
-  });
+  document
+    .querySelectorAll('#my-board .preview, #my-board .preview-invalid')
+    .forEach((c) => {
+      c.classList.remove('preview', 'preview-invalid');
+    });
 }
 
-function rotateShip() { horizontal = !horizontal; }
-document.addEventListener('keydown', (e) => { if (e.key === 'r' || e.key === 'R') rotateShip(); });
+function rotateShip() {
+  horizontal = !horizontal;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') rotateShip();
+});
 
 function confirmPlacement() {
-  if (placementShips.some(s => s === null)) return;
+  if (placementShips.some((s) => s === null)) return;
   myShips = placementShips;
   socket.emit('place-ships', { ships: placementShips });
 }
@@ -222,8 +272,12 @@ function startFiring() {
   document.getElementById('placement-controls').classList.add('hidden');
   createBoardDOM('my-board', null);
   createBoardDOM('op-board', onFireClick);
-  opShotsBoard = opShotsBoard || Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
-  incomingShotsBoard = incomingShotsBoard || Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+  opShotsBoard =
+    opShotsBoard ||
+    Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+  incomingShotsBoard =
+    incomingShotsBoard ||
+    Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   renderMyBoardFiring(incomingShotsBoard);
   renderOpBoard();
 }
@@ -236,7 +290,8 @@ function onFireClick(x, y) {
 
 // --- Socket events ---
 socket.on('game-created', ({ gameId: gid, playerId: pid }) => {
-  gameId = gid; playerId = pid;
+  gameId = gid;
+  playerId = pid;
   sessionStorage.setItem('gameId', gid);
   sessionStorage.setItem('playerId', pid);
   showScreen('game-screen');
@@ -251,7 +306,8 @@ socket.on('game-created', ({ gameId: gid, playerId: pid }) => {
 });
 
 socket.on('game-joined', ({ gameId: gid, playerId: pid }) => {
-  gameId = gid; playerId = pid;
+  gameId = gid;
+  playerId = pid;
   sessionStorage.setItem('gameId', gid);
   sessionStorage.setItem('playerId', pid);
   showScreen('game-screen');
@@ -279,7 +335,7 @@ function updateTurnDisplay(turn) {
     setStatus('');
     document.getElementById('op-board').classList.add('clickable');
   } else {
-    setTurn('⏳ Opponent\'s turn...');
+    setTurn("⏳ Opponent's turn...");
     document.getElementById('op-board').classList.remove('clickable');
   }
 }
@@ -307,7 +363,9 @@ socket.on('shot-result', ({ player, x, y, result, sunk, winner }) => {
   if (winner) {
     phase = 'finished';
     const won = winner === playerId;
-    document.getElementById('win-text').textContent = won ? '🎉 You Win!' : '😞 You Lose';
+    document.getElementById('win-text').textContent = won
+      ? '🎉 You Win!'
+      : '😞 You Lose';
     document.getElementById('win-overlay').classList.remove('hidden');
     sessionStorage.removeItem('gameId');
     sessionStorage.removeItem('playerId');
@@ -317,35 +375,48 @@ socket.on('shot-result', ({ player, x, y, result, sunk, winner }) => {
   }
 });
 
-socket.on('rejoin-state', ({ phase: p, turn, myShips: ships, myShots, incomingShots, winner, mode }) => {
-  gameMode = mode;
-  myShips = ships;
-  opShotsBoard = myShots;
-  incomingShotsBoard = incomingShots;
-  if (winner) {
-    phase = 'finished';
-    showScreen('game-screen');
-    startFiring();
-    const won = winner === playerId;
-    document.getElementById('win-text').textContent = won ? '🎉 You Win!' : '😞 You Lose';
-    document.getElementById('win-overlay').classList.remove('hidden');
-  } else if (p === 'firing') {
-    showScreen('game-screen');
-    startFiring();
-    updateTurnDisplay(turn);
-  } else if (p === 'placement') {
-    showScreen('game-screen');
-    if (ships) {
-      placementShips = ships;
-      setStatus('Ships placed! Waiting for opponent...');
-      createBoardDOM('my-board', null);
-      createBoardDOM('op-board', null);
-      renderMyBoard();
-    } else {
-      startPlacement();
+socket.on(
+  'rejoin-state',
+  ({
+    phase: p,
+    turn,
+    myShips: ships,
+    myShots,
+    incomingShots,
+    winner,
+    mode,
+  }) => {
+    gameMode = mode;
+    myShips = ships;
+    opShotsBoard = myShots;
+    incomingShotsBoard = incomingShots;
+    if (winner) {
+      phase = 'finished';
+      showScreen('game-screen');
+      startFiring();
+      const won = winner === playerId;
+      document.getElementById('win-text').textContent = won
+        ? '🎉 You Win!'
+        : '😞 You Lose';
+      document.getElementById('win-overlay').classList.remove('hidden');
+    } else if (p === 'firing') {
+      showScreen('game-screen');
+      startFiring();
+      updateTurnDisplay(turn);
+    } else if (p === 'placement') {
+      showScreen('game-screen');
+      if (ships) {
+        placementShips = ships;
+        setStatus('Ships placed! Waiting for opponent...');
+        createBoardDOM('my-board', null);
+        createBoardDOM('op-board', null);
+        renderMyBoard();
+      } else {
+        startPlacement();
+      }
     }
   }
-});
+);
 
 socket.on('error-msg', (msg) => setStatus(`⚠️ ${msg}`));
 
@@ -353,14 +424,16 @@ socket.on('error-msg', (msg) => setStatus(`⚠️ ${msg}`));
 function startAI() {
   gameMode = 'ai';
   sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null; incomingShotsBoard = null;
+  opShotsBoard = null;
+  incomingShotsBoard = null;
   socket.emit('create-ai-game');
 }
 
 function createMP() {
   gameMode = 'mp';
   sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null; incomingShotsBoard = null;
+  opShotsBoard = null;
+  incomingShotsBoard = null;
   socket.emit('create-mp-game');
 }
 
@@ -369,7 +442,8 @@ function joinMP() {
   if (!id) return;
   gameMode = 'mp';
   sunkShips = { me: new Set(), op: new Set() };
-  opShotsBoard = null; incomingShotsBoard = null;
+  opShotsBoard = null;
+  incomingShotsBoard = null;
   socket.emit('join-game', { gameId: id });
 }
 
@@ -396,10 +470,11 @@ async function showHistory() {
   const tbody = document.querySelector('#history-table tbody');
   tbody.innerHTML = '';
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#607d8b">No completed games yet</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="4" style="text-align:center;color:#607d8b">No completed games yet</td></tr>';
     return;
   }
-  data.forEach(g => {
+  data.forEach((g) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${new Date(g.finished_at + 'Z').toLocaleString()}</td><td>${g.mode === 'ai' ? 'vs AI' : 'Multiplayer'}</td><td>${g.winner === 'p1' ? 'Player 1' : g.winner === 'p2' ? (g.mode === 'ai' ? 'AI' : 'Player 2') : '-'}</td><td>${g.total_moves}</td>`;
     tbody.appendChild(tr);
