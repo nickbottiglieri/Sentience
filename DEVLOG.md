@@ -86,7 +86,7 @@ Fixed a bug where refreshing a multiplayer tab with a `?join=` URL param would r
 
 ### Remaining Vectors
 
-- **Rate limiting:** No throttle on WebSocket events — rapid-fire requests are possible.
+- **Rate limiting:** Per-socket rate limiter (5 events/sec) using Socket.IO middleware. Exceeding the limit disconnects the socket. Prevents DoS via event flooding and DB/log pollution.
 - **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking info over many observations.
 - **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens.
 
