@@ -1,5 +1,7 @@
 # Development Log
 
+**Live Demo:** https://sentiencebattleship-production.up.railway.app
+
 ## Tooling
 
 This project is being built with the assistance of Claude Sonnet (Anthropic) via MCP (Model Context Protocol) servers. MCP enables the AI to interact directly with the local development environment — reading/writing files, running shell commands, and managing git — acting as a pair programming partner throughout the build.
