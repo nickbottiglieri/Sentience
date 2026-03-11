@@ -402,11 +402,18 @@ socket.on(
     incomingShots,
     winner,
     mode,
+    waitingForOpponent,
   }) => {
     gameMode = mode;
     myShips = ships;
     opShotsBoard = myShots;
     incomingShotsBoard = incomingShots;
+    if (waitingForOpponent) {
+      const link = `${location.origin}?join=${gameId}`;
+      const el = document.getElementById('share-link');
+      el.innerHTML = `Share this link: <a href="${link}">${link}</a> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">📋 Copy</button>`;
+      el.classList.remove('hidden');
+    }
     if (winner) {
       phase = 'finished';
       showScreen('game-screen');
@@ -444,7 +451,10 @@ socket.on('player-reconnected', ({ playerId: pid }) => {
 });
 
 socket.on('player-forfeited', ({ winner, forfeiter }) => {
+  if (forfeiter === playerId && phase === 'menu') return; // stale event from old game
   phase = 'finished';
+  clearReturnTimer();
+  updateReturnButton();
   const won = winner === playerId;
   document.getElementById('win-text').textContent = won ? '🎉 Opponent Forfeited — You Win!' : '🏳️ You Forfeited';
   document.getElementById('win-overlay').classList.remove('hidden');
@@ -466,8 +476,20 @@ let returnTimer = null;
 
 function updateReturnButton() {
   const btn = document.getElementById('return-btn');
-  if (hasActiveGame()) btn.classList.remove('hidden');
-  else { btn.classList.add('hidden'); clearReturnTimer(); }
+  const forfeitBtn = document.getElementById('forfeit-btn');
+  if (hasActiveGame()) { btn.classList.remove('hidden'); forfeitBtn.classList.remove('hidden'); }
+  else { btn.classList.add('hidden'); forfeitBtn.classList.add('hidden'); clearReturnTimer(); }
+}
+
+function forfeitFromMenu() {
+  clearReturnTimer();
+  if (gameId) socket.emit('forfeit', { gameId, playerId });
+  gameId = null;
+  playerId = null;
+  sessionStorage.removeItem('gameId');
+  sessionStorage.removeItem('playerId');
+  sessionStorage.removeItem('sessionToken');
+  updateReturnButton();
 }
 
 function startReturnTimer() {
@@ -479,10 +501,10 @@ function startReturnTimer() {
     btn.textContent = `↩ Return to Game (${remaining}s)`;
     if (remaining <= 0) {
       clearReturnTimer();
-      btn.classList.add('hidden');
       sessionStorage.removeItem('gameId');
       sessionStorage.removeItem('playerId');
       sessionStorage.removeItem('sessionToken');
+      updateReturnButton();
     }
   }, 250);
 }

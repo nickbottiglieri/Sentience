@@ -109,6 +109,7 @@ function registerSocketHandlers(io) {
         phase: game.phase, turn: game.turn, myShips: game.ships[playerId],
         myShots: shotMapToArray(game.shots[playerId]), incomingShots: shotMapToArray(game.shots[opponent]),
         winner: game.winner, mode: game.mode,
+        waitingForOpponent: game.mode === 'mp' && !game.sockets[opponent],
       });
     });
 
@@ -155,11 +156,11 @@ function registerSocketHandlers(io) {
       game.winner = opponent;
       game.phase = 'finished';
       stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
-      io.to(game.id).emit('player-forfeited', { winner: opponent, forfeiter: playerId });
       if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
       socket.leave(gameId);
       socket.gameId = null;
       socket.playerId = null;
+      io.to(game.id).emit('player-forfeited', { winner: opponent, forfeiter: playerId });
     });
 
     socket.on('leave-game', ({ gameId, playerId }) => {

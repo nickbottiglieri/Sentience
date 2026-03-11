@@ -104,6 +104,9 @@ When player 2 refreshed a tab with a `?join=` URL param, the client re-emitted `
 **2. Stale dense data after sparse refactor**
 After switching from dense 2D arrays to sparse Maps, old games stored in SQLite still had the dense format. Restoring them produced Maps with `null` keys, crashing `shotMapToArray`. Fix: added type guards in the conversion function and cleared the old database. Going forward, only sparse format is persisted.
 
+**3. Forfeit race condition traps player in menu loop**
+After forfeiting a game and clicking "Menu" on the win overlay, the return-to-game timer and button persisted, preventing new games from being created. Root cause: the server emitted `player-forfeited` to the room *before* the forfeiting socket left, so the client received its own forfeit event — which could fire after a new game was already created, showing a stale win overlay on top of it. Fix: server now calls `socket.leave()` before broadcasting the forfeit event, and the client ignores stale forfeit events. Also added a dedicated "Forfeit Game" button on the menu so players can abandon a game without starting a new one, and ensured the return timer and both menu buttons are properly cleaned up on forfeit/expiry.
+
 **3. Back to menu doesn't release player slot**
 When a player clicked "← Menu" mid-game, the client cleared sessionStorage but never notified the server. The server still held their stale socket in the game. If they later tried to rejoin, the server saw both slots as occupied and either rejected them or reset them to placement. Fix: client now emits `leave-game` before clearing local state, and the server releases the socket slot and removes them from the Socket.IO room.
 
