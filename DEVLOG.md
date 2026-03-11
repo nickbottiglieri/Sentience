@@ -86,6 +86,16 @@ Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This make
 - Serialization: only persists occupied/shot entries, not entire n² grid
 - Client still receives dense arrays (converted server-side) — no frontend changes needed
 
+### Step 11 — Disconnect Grace Period & Auto-Forfeit
+
+Added a 45-second grace period for disconnected multiplayer players:
+
+- On disconnect, opponent sees a warning that the player has 45s to reconnect
+- If the player reconnects in time, the timer is cancelled and the opponent is notified
+- If the timer expires, the disconnected player is auto-forfeited and the opponent wins
+- Finished games are purged from memory every 5 minutes to prevent resource leaks
+- AI games are excluded from grace period logic
+
 ## Bugs Found & Resolved
 
 **1. Multiplayer refresh sends join instead of rejoin**
@@ -110,6 +120,7 @@ When a player clicked "← Menu" mid-game, the client cleared sessionStorage but
 - **Forfeit protection:** Starting a new game while one is active shows a confirmation warning. Players can forfeit or return to their existing game.
 - **Return to game:** A persistent "↩ Return to Game" button appears on the menu when a game is in progress, making it easy to navigate back.
 - **Opponent notification on forfeit:** When a player forfeits, their opponent immediately sees a win screen — no silent abandonment.
+- **Disconnect handling:** Opponent is notified when a player disconnects, with a 45s grace period. If they don't return, auto-forfeit triggers and the remaining player wins.
 
 ## Runtime Complexity
 
@@ -136,10 +147,12 @@ For a 10×10 board the difference is negligible. For a 10,000×10,000 board, den
 - **Shot validation:** Server rejects duplicate shots, out-of-turn firing, and out-of-bounds coordinates.
 - **Placement validation:** Server validates ship placement (no overlaps, within bounds) before accepting.
 - **Session tokens:** Crypto-random tokens prevent socket impersonation and reconnect hijacking. A malicious client cannot rejoin as another player without their token.
+- **Rate limiting:** Per-socket rate limiter (5 events/sec) using Socket.IO middleware. Exceeding the limit disconnects the socket. Prevents DoS via event flooding and DB/log pollution.
+- **Disconnect grace period:** 45s reconnection window before auto-forfeit. Prevents players from silently abandoning games and stranding opponents.
+- **Stale game cleanup:** Finished games are purged from memory every 5 minutes to prevent resource leaks.
 
 ### Remaining Vectors
 
-- **Rate limiting:** Per-socket rate limiter (5 events/sec) using Socket.IO middleware. Exceeding the limit disconnects the socket. Prevents DoS via event flooding and DB/log pollution.
 - **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking info over many observations.
 - **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens.
 
@@ -185,6 +198,5 @@ Neither is needed at current scale. A single Railway instance will hit SQLite wr
 ## Next Steps
 
 - Graceful shutdown with connection draining
-- Player reconnection with grace period
 - Health check / readiness endpoints
 - Structured logging
