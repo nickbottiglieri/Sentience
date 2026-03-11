@@ -90,6 +90,18 @@ Fixed a bug where refreshing a multiplayer tab with a `?join=` URL param would r
 - **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking info over many observations.
 - **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens.
 
+### Why Ephemeral Tokens Over JWT/Accounts
+
+The current crypto-random token is sufficient because the threat model is proving "I'm the same person who started this game" — not persistent identity across sessions. A 48-char hex token is cryptographically unguessable, and an attacker would need physical access or an XSS exploit to steal it from sessionStorage — JWT/cookies are equally vulnerable to both.
+
+**When accounts would matter:**
+- Leaderboards / ELO ratings (need to know *who* won across games)
+- Friends list / matchmaking (persistent relationships)
+- Abuse prevention (ban a player, not just a socket)
+- Cross-device play (resume on a different browser)
+
+**Tradeoff:** Accounts add complexity (password hashing, reset flows, registration UI, token expiry/refresh, user database to protect) without improving single-game security. The attack surface actually grows. Ephemeral tokens are the right fit for a casual play-and-forget model; proper auth becomes worthwhile only when features require persistent identity.
+
 ## Deployment
 
 Deployed on **Railway** with auto-deploy from GitHub on push.
