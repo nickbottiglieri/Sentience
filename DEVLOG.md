@@ -86,6 +86,17 @@ Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This make
 - Serialization: only persists occupied/shot entries, not entire n² grid
 - Client still receives dense arrays (converted server-side) — no frontend changes needed
 
+## Bugs Found & Resolved
+
+**1. Multiplayer refresh sends join instead of rejoin**
+When player 2 refreshed a tab with a `?join=` URL param, the client re-emitted `join-game` instead of `rejoin`. The server rejected it as "Game is full" since both socket slots were still occupied. Fix: check sessionStorage for an existing session before checking URL params — rejoin takes priority over join.
+
+**2. Stale dense data after sparse refactor**
+After switching from dense 2D arrays to sparse Maps, old games stored in SQLite still had the dense format. Restoring them produced Maps with `null` keys, crashing `shotMapToArray`. Fix: added type guards in the conversion function and cleared the old database. Going forward, only sparse format is persisted.
+
+**3. Back to menu doesn't release player slot**
+When a player clicked "← Menu" mid-game, the client cleared sessionStorage but never notified the server. The server still held their stale socket in the game. If they later tried to rejoin, the server saw both slots as occupied and either rejected them or reset them to placement. Fix: client now emits `leave-game` before clearing local state, and the server releases the socket slot and removes them from the Socket.IO room.
+
 ## Customer Experience
 
 - **Ship placement reset:** Reset button lets players clear all ships and start placement over without refreshing the page.
