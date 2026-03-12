@@ -93,7 +93,7 @@ Added a 45-second grace period for disconnected multiplayer players:
 - On disconnect, opponent sees a warning that the player has 45s to reconnect
 - If the player reconnects in time, the timer is cancelled and the opponent is notified
 - If the timer expires, the disconnected player is auto-forfeited and the opponent wins
-- Finished games are purged from memory every 5 minutes to prevent resource leaks
+- Finished games are explicitly evicted from the game store on completion or forfeit; Redis TTL (1 hour) handles expiry for abandoned games
 - AI games are excluded from grace period logic
 
 ### Spike — Redis Game State Layer
@@ -192,7 +192,7 @@ For a 10×10 board the difference is negligible. For a 10,000×10,000 board, den
 - **Session tokens:** Crypto-random tokens prevent socket impersonation and reconnect hijacking. A malicious client cannot rejoin as another player without their token.
 - **Rate limiting:** Per-socket rate limiter (5 events/sec) using Socket.IO middleware. Exceeding the limit disconnects the socket. Prevents DoS via event flooding and DB/log pollution.
 - **Disconnect grace period:** 45s reconnection window before auto-forfeit. Prevents players from silently abandoning games and stranding opponents.
-- **Stale game cleanup:** Finished games are purged from memory every 5 minutes to prevent resource leaks.
+- **Stale game cleanup:** Finished games are evicted from the game store on completion or forfeit. Abandoned games expire via Redis TTL (1 hour).
 
 ### Remaining Vectors
 
