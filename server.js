@@ -21,6 +21,8 @@ async function start() {
   if (redisClient) {
     const pubClient = redisClient.duplicate();
     const subClient = redisClient.duplicate();
+    pubClient.on('error', (err) => console.error('Redis pub error:', err.message));
+    subClient.on('error', (err) => console.error('Redis sub error:', err.message));
     io.adapter(createAdapter(pubClient, subClient));
     console.log('Socket.IO Redis adapter enabled');
   }
