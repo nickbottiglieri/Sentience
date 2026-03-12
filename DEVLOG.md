@@ -101,49 +101,26 @@ Added a Redis-backed game state store to decouple live game state from the singl
 2. In-memory fallback — used when Redis is unavailable
 3. SQLite — cold storage fallback for games not in cache
 
-Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socketMap` since it's per-process and shouldn't be serialized.
+Ephemeral state (socket IDs) is kept in a separate in-memory `socketMap` since it's per-process and shouldn't be serialized.
 
 **`src/socketHandlers.js`** — Refactored all game state access through `gameStore` instead of a local `games` object:
 - All handlers are now `async` to support Redis round-trips
 - Finished games are evicted from the store via `gameStore.deleteGame()`
 - Removed the 5-minute cleanup interval (Redis TTL handles expiry)
-- Removed the exported `games` object (no longer needed)
 
 **`server.js`** — Initializes the game store on startup and wires up `@socket.io/redis-adapter` for cross-process room broadcasts when Redis is available.
 
 **Backward compatible:** Without `REDIS_URL`, the app falls back to in-memory storage and behaves identically to before.
 
-**Distributed locking** — Added `withLock(gameId, fn)` to prevent race conditions when concurrent events for the same game hit different server processes. Uses Redis `SET NX PX` (atomic acquire with 5s auto-expire) with retry logic (20 attempts, 50ms delay). Every handler that reads, mutates, and writes game state is wrapped in a lock. Without Redis, `withLock` is a no-op — zero overhead in single-process mode.
+#### Distributed Locking
+
+Added `withLock(gameId, fn)` to prevent race conditions when concurrent events for the same game hit different server processes. Uses Redis `SET NX PX` (atomic acquire with 5s auto-expire) with retry logic (20 attempts, 50ms delay). Every handler that reads, mutates, and writes game state is wrapped in a lock. Without Redis, `withLock` is a no-op — zero overhead in single-process mode.
 
 **Example 1 — Lost shot:** Player 1 fires on process A. Process A reads the game from Redis. Before A writes back, Player 2's `place-ships` event hits process B, which also reads the game. Process B writes first (ships placed). Process A writes second (shot recorded) — but its write is based on the stale read, so Player 2's ships are silently erased. With locking, process B blocks until A's read-mutate-write cycle completes.
 
 **Example 2 — Duplicate slot assignment:** Two players click "Join" at the same time, routed to different processes. Both read the game, both see `tokens.p1` exists but `tokens.p2` is empty, both assign themselves as `p2` and generate separate tokens. The second write overwrites the first player's token — that player can never rejoin. With locking, the second join waits until the first completes, sees `tokens.p2` is now taken, and gets rejected with "Game is full."
 
-**Health check** — `GET /api/health` returns server status, uptime in seconds, and Redis connectivity (pings Redis to verify it's reachable, not just configured). Reports `connected`, `error`, or `disabled`. Configured as Railway's healthcheck path — Railway waits for a `200 OK` from the new deployment before routing traffic to it, preventing broken deploys from receiving requests.
-
-**Graceful shutdown** — On `SIGTERM`/`SIGINT` (e.g., Railway deploying a new version), the server stops accepting new connections, disconnects all sockets (clients auto-reconnect to another instance via Socket.IO — game state is in Redis so they resume seamlessly), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
-
-**Load testing** — Custom load test script (`loadtest/run.js`) that simulates concurrent AI game lifecycles over Socket.IO, measuring shot-result latency end-to-end. Nginx round-robins traffic across the two Node processes, replicating the same topology Railway uses with multiple replicas.
-
-We tested with 2 processes because that's the minimum needed to prove cross-process coordination works — Redis state store, Socket.IO adapter, and distributed locking all get exercised. Adding more processes wouldn't change the architecture; it would just add more round-robin targets. The goal isn't to find the server's breaking point — it's to establish a baseline showing the distributed system works correctly under concurrent load, with zero errors and stable latency.
-
-**Baseline results (2 processes, nginx, Redis, AI delay disabled):**
-
-| Metric | Value |
-|---|---|
-| Concurrent games | 50 |
-| Rounds | 3 |
-| Total games completed | 150 / 150 |
-| Errors | 0 |
-| Total shots processed | 9,123 |
-| Shot latency p50 | 8ms |
-| Shot latency p95 | 22ms |
-| Shot latency p99 | 28ms |
-| Min / Max latency | 0ms / 67ms |
-
-All 150 games completed with zero errors — no lost shots, no state corruption, no lock timeouts. Latency stayed flat across all 3 rounds, indicating no degradation under sustained load. These numbers serve as the benchmark for the distributed architecture.
-
-**Locking strategy analysis — pessimistic vs optimistic:**
+**Pessimistic vs optimistic locking:**
 
 The current implementation uses pessimistic locking (Redis mutex via `SET NX PX`). Every read-mutate-write acquires a lock first, even when no conflict exists. This guarantees correctness but adds 2 extra Redis round-trips per operation (acquire + release).
 
@@ -159,12 +136,44 @@ An alternative is optimistic concurrency control (OCC): read the game with a ver
 
 Battleship is inherently low-contention — turn-based games rarely produce simultaneous events for the same game. `place-ships` is the only realistic collision window (both players place at the same time). OCC would eliminate lock overhead on ~99.9% of operations while still handling the edge case via retry. Pessimistic locking is the safer default, but OCC is the more efficient choice for this specific workload.
 
-### Step 12 — Health Check & Graceful Shutdown
+#### Operational Readiness
 
-Added operational readiness features:
+**Health check** — `GET /api/health` returns server status, uptime in seconds, and Redis connectivity (pings Redis to verify it's reachable, not just configured). Reports `connected`, `error`, or `disabled`. Configured as Railway's healthcheck path — Railway waits for a `200 OK` from the new deployment before routing traffic to it, preventing broken deploys from receiving requests.
 
-- **`GET /api/health`** — Returns JSON with server status, uptime in seconds, and Redis connectivity (`connected`, `error`, or `disabled`). Useful for Railway health checks and monitoring.
-- **Graceful shutdown** — On `SIGTERM`/`SIGINT`, the server stops accepting new connections, disconnects all sockets (clients reconnect to another instance via Redis), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
+**Graceful shutdown** — On `SIGTERM`/`SIGINT` (e.g., Railway deploying a new version), the server stops accepting new connections, disconnects all sockets (clients auto-reconnect to another instance via Socket.IO — game state is in Redis so they resume seamlessly), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
+
+#### Load Testing
+
+Custom load test script (`loadtest/run.js`) simulates concurrent AI game lifecycles over Socket.IO, measuring shot-result latency end-to-end. Nginx round-robins traffic across two Node processes, replicating the same topology Railway uses with multiple replicas. We tested with 2 processes because that's the minimum needed to prove cross-process coordination — Redis state store, Socket.IO adapter, and distributed locking all get exercised.
+
+**Baseline results (2 processes, nginx, Redis, AI delay disabled):**
+
+| Metric | Value |
+|---|---|
+| Concurrent games | 50 |
+| Rounds | 3 |
+| Total games completed | 150 / 150 |
+| Errors | 0 |
+| Total shots processed | 9,123 |
+| Shot latency p50 | 8ms |
+| Shot latency p95 | 22ms |
+| Shot latency p99 | 28ms |
+| Min / Max latency | 0ms / 67ms |
+
+All 150 games completed with zero errors — no lost shots, no state corruption, no lock timeouts. Latency stayed flat across all 3 rounds, indicating no degradation under sustained load.
+
+**Stress test — finding the breaking point:**
+
+| Concurrent Games | Completed | Errors | p50 | p95 | p99 | Max |
+|---|---|---|---|---|---|---|
+| 50 | 50/50 | 0 | 8ms | 22ms | 28ms | 67ms |
+| 100 | 100/100 | 0 | 10ms | 24ms | 30ms | 38ms |
+| 120 | 120/120 | 0 | 11ms | 31ms | 41ms | 68ms |
+| 130 | 124/130 | 6 | 8ms | 25ms | 34ms | 56ms |
+| 150 | 124/150 | 26 | 9ms | 27ms | 36ms | 49ms |
+| 200 | 124/200 | 76 | 13ms | 33ms | 41ms | 61ms |
+
+The system sustains ~120 concurrent games across 2 processes with zero errors and p99 under 41ms. Beyond 130, games start timing out (60s limit) — the bottleneck is connection throughput on a local machine, not state corruption or lock contention. Latency remains stable even under failure, confirming the system degrades gracefully rather than catastrophically.
 
 ### Step 11 — Unit Tests
 
