@@ -22,7 +22,7 @@ Open `http://localhost:3000` in your browser.
 
 - **Backend:** Node.js + Express + Socket.IO
 - **Frontend:** Vanilla HTML/CSS/JS (no build step)
-- **Storage:** SQLite via `better-sqlite3`
+- **Storage:** Postgres for game history, Redis for live state
 - **Deployment:** Railway with auto-deploy from GitHub
 
 See [DEVLOG.md](DEVLOG.md) for detailed design decisions, security analysis, runtime complexity, and development history.

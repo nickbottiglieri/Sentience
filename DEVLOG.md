@@ -99,7 +99,7 @@ Added a Redis-backed game state store to decouple live game state from the singl
 **`src/gameStore.js`** — New module providing a 3-tier game state lookup:
 1. Redis (if `REDIS_URL` is set) — primary cache with 1-hour TTL
 2. In-memory fallback — used when Redis is unavailable
-3. SQLite — cold storage fallback for games not in cache
+3. Postgres — cold storage fallback for games not in cache
 
 Ephemeral state (socket IDs) is kept in a separate in-memory `socketMap` since it's per-process and shouldn't be serialized.
 
@@ -141,6 +141,12 @@ Battleship is inherently low-contention — turn-based games rarely produce simu
 **Health check** — `GET /api/health` returns server status, uptime in seconds, and Redis connectivity (pings Redis to verify it's reachable, not just configured). Reports `connected`, `error`, or `disabled`. Configured as Railway's healthcheck path — Railway waits for a `200 OK` from the new deployment before routing traffic to it, preventing broken deploys from receiving requests.
 
 **Graceful shutdown** — On `SIGTERM`/`SIGINT` (e.g., Railway deploying a new version), the server stops accepting new connections, disconnects all sockets (clients auto-reconnect to another instance via Socket.IO — game state is in Redis so they resume seamlessly), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
+
+#### SQLite → Postgres Migration
+
+Replaced SQLite (`better-sqlite3`) with Postgres (`pg`) to remove the volume dependency that blocked horizontal scaling. Railway's persistent volume can only attach to a single instance — with SQLite on a volume, replicas were impossible. Postgres runs as a separate Railway service that all instances connect to via `DATABASE_URL`.
+
+The migration preserved the same `stmts` interface (same method names, same call sites) but made all database calls async. Since every handler was already `async` from the Redis refactor, this was a mechanical change — adding `await` to ~12 call sites. Tables are auto-created on startup via `db.init()`. Without `DATABASE_URL`, all stmts are no-ops so the game still works locally without Postgres (history just won't persist).
 
 #### Load Testing
 
