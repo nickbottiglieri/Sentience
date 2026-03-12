@@ -119,6 +119,13 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Example 2 — Duplicate slot assignment:** Two players click "Join" at the same time, routed to different processes. Both read the game, both see `tokens.p1` exists but `tokens.p2` is empty, both assign themselves as `p2` and generate separate tokens. The second write overwrites the first player's token — that player can never rejoin. With locking, the second join waits until the first completes, sees `tokens.p2` is now taken, and gets rejected with "Game is full."
 
+### Step 12 — Health Check & Graceful Shutdown
+
+Added operational readiness features:
+
+- **`GET /api/health`** — Returns JSON with server status, uptime in seconds, and Redis connectivity (`connected`, `error`, or `disabled`). Useful for Railway health checks and monitoring.
+- **Graceful shutdown** — On `SIGTERM`/`SIGINT`, the server stops accepting new connections, disconnects all sockets (clients reconnect to another instance via Redis), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
+
 ### Step 11 — Unit Tests
 
 Added Jest test suite (28 tests) covering the three core modules:
@@ -251,6 +258,4 @@ Without `REDIS_URL`, the app falls back to in-memory storage and behaves as a si
 
 ## Next Steps
 
-- Graceful shutdown with connection draining
-- Health check / readiness endpoints
 - Structured logging
