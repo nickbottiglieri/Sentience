@@ -14,7 +14,45 @@ function registerRoutes(app) {
       status: 'ok',
       uptime: Math.floor((Date.now() - startTime) / 1000),
       redis: redis ? (redisOk ? 'connected' : 'error') : 'disabled',
+      memory: process.memoryUsage(),
     });
+  });
+
+  app.get('/api/diagnostics', async (req, res) => {
+    const timings = {};
+    const redis = gameStore.getRedisClient();
+
+    // Redis ping
+    if (redis) {
+      const t0 = performance.now();
+      await redis.ping();
+      timings.redisPingMs = +(performance.now() - t0).toFixed(2);
+
+      // Redis set/get/del cycle
+      const t1 = performance.now();
+      await redis.set('diag:test', 'x', 'EX', 5);
+      await redis.get('diag:test');
+      await redis.del('diag:test');
+      timings.redisSetGetDelMs = +(performance.now() - t1).toFixed(2);
+    }
+
+    // Postgres round-trip
+    const { pool } = require('./db');
+    if (pool) {
+      const t2 = performance.now();
+      await pool.query('SELECT 1');
+      timings.pgPingMs = +(performance.now() - t2).toFixed(2);
+    }
+
+    // Event loop lag
+    const t3 = performance.now();
+    await new Promise(r => setImmediate(r));
+    timings.eventLoopLagMs = +(performance.now() - t3).toFixed(2);
+
+    timings.memory = process.memoryUsage();
+    timings.activeConnections = require('socket.io').Server ? undefined : null;
+
+    res.json(timings);
   });
 
   app.get('/api/history', async (req, res) => {
