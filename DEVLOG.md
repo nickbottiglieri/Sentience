@@ -115,6 +115,10 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Distributed locking** — Added `withLock(gameId, fn)` to prevent race conditions when concurrent events for the same game hit different server processes. Uses Redis `SET NX PX` (atomic acquire with 5s auto-expire) with retry logic (20 attempts, 50ms delay). Every handler that reads, mutates, and writes game state is wrapped in a lock. Without Redis, `withLock` is a no-op — zero overhead in single-process mode.
 
+**Example 1 — Lost shot:** Player 1 fires on process A. Process A reads the game from Redis. Before A writes back, Player 2's `place-ships` event hits process B, which also reads the game. Process B writes first (ships placed). Process A writes second (shot recorded) — but its write is based on the stale read, so Player 2's ships are silently erased. With locking, process B blocks until A's read-mutate-write cycle completes.
+
+**Example 2 — Duplicate slot assignment:** Two players click "Join" at the same time, routed to different processes. Both read the game, both see `tokens.p1` exists but `tokens.p2` is empty, both assign themselves as `p2` and generate separate tokens. The second write overwrites the first player's token — that player can never rejoin. With locking, the second join waits until the first completes, sees `tokens.p2` is now taken, and gets rejected with "Game is full."
+
 ### Step 11 — Unit Tests
 
 Added Jest test suite (28 tests) covering the three core modules:
