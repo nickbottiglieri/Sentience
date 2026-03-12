@@ -228,6 +228,12 @@ The game runs on a single Node.js process by default. Horizontal scaling (multip
 
 Without `REDIS_URL`, the app falls back to in-memory storage and behaves as a single-process server. A single Railway instance will hit SQLite write throughput limits long before Socket.IO connection limits.
 
+### Storage Alternatives Considered
+
+- **Redis-only (no Postgres)** — Game history is the only reason Postgres exists. Dropping it eliminates a failure mode and simplifies the stack — the app already runs without it (all DB calls become no-ops). The tradeoff is losing persistent game history once Redis TTLs expire.
+- **DynamoDB** — High write throughput and auto-scaling storage would avoid the disk pressure we hit during load testing. Worth considering at scale, but with batch writes Postgres is no longer in the hot path and handles the workload fine.
+- **SQLite** — The original storage layer. Replaced with Postgres because SQLite requires a persistent volume, and Railway volumes can only attach to a single instance — blocking horizontal scaling. See [SPIKE.md](SPIKE.md) for the full migration rationale.
+
 ## Next Steps
 
 - Structured logging
