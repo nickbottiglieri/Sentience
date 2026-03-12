@@ -220,6 +220,8 @@ The current crypto-random token is sufficient because the threat model is provin
 
 Deployed on **Railway** with auto-deploy from GitHub on push.
 
+![Railway Dashboard](docs/railway-dashboard.jpg)
+
 ### Why Railway?
 
 - Zero-config for Node.js — detects `package.json` and runs automatically
