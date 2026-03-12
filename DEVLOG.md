@@ -184,20 +184,27 @@ For a 10×10 board the difference is negligible. For a 10,000×10,000 board, den
 
 ## Security
 
-### What's Protected
+### How a Player Could Cheat (and How We Prevent It)
 
-- **Server-authoritative logic:** All game state lives server-side. Clients never receive opponent ship positions.
-- **Shot validation:** Server rejects duplicate shots, out-of-turn firing, and out-of-bounds coordinates.
-- **Placement validation:** Server validates ship placement (no overlaps, within bounds) before accepting.
-- **Session tokens:** Crypto-random tokens prevent socket impersonation and reconnect hijacking. A malicious client cannot rejoin as another player without their token.
-- **Rate limiting:** Per-socket rate limiter (5 events/sec) using Socket.IO middleware. Exceeding the limit disconnects the socket. Prevents DoS via event flooding and DB/log pollution.
-- **Disconnect grace period:** 45s reconnection window before auto-forfeit. Prevents players from silently abandoning games and stranding opponents.
-- **Stale game cleanup:** Finished games are evicted from the game store on completion or forfeit. Abandoned games expire via Redis TTL (1 hour).
+| Cheat Attempt | How It Would Work | Prevention |
+|---|---|---|
+| **See opponent's ships** | Inspect network traffic or JS state for ship positions | Server never sends opponent ship data to the client. The `rejoin-state` payload only includes `myShips` — the opponent's board is represented solely by your own shot results. There is no client-side object containing enemy positions. |
+| **Fire out of turn** | Emit `fire` events during the opponent's turn | Server checks `game.turn !== pid` before processing. Out-of-turn shots are rejected with an error and never applied to game state. |
+| **Fire on the same cell twice** | Re-fire a known hit to stall or confuse state | `shotMap.has(k)` check rejects duplicate coordinates. The shot is never recorded. |
+| **Fire out of bounds** | Send coordinates outside the 10×10 grid (e.g., `x: -1` or `x: 100`) | Bounds check: `x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE` rejects the shot before any state mutation. |
+| **Place ships illegally** | Overlap ships, go out of bounds, or send fewer/more ships | `validatePlacement()` checks array length matches expected ship count, verifies every cell is in bounds, and uses a Set to detect overlapping coordinates. Invalid placements are rejected. |
+| **Place ships after game starts** | Re-emit `place-ships` during the firing phase | Server checks `game.phase !== 'placement'` and `game.ships[pid]` (already placed). Both conditions reject the event. |
+| **Impersonate another player** | Rejoin as the opponent by guessing their session | Rejoin requires a 48-character crypto-random hex token (generated via `crypto.randomBytes(24)`). Brute-forcing 192 bits of entropy is computationally infeasible. |
+| **Steal a session token** | XSS or physical access to extract token from sessionStorage | Tokens are stored in `sessionStorage` (not `localStorage`), so they're scoped to the tab and cleared on close. XSS is the main risk — mitigated by serving static files with no user-generated content or inline script injection points. |
+| **Flood the server** | Spam events to overload the server or pollute the database | Per-socket rate limiter (5 events/sec) via Socket.IO middleware. Exceeding the limit immediately disconnects the socket. |
+| **Abandon a game to avoid losing** | Close the tab when losing to strand the opponent | 45-second disconnect grace period. If the player doesn't reconnect, they're auto-forfeited and the opponent wins. |
+| **Rejoin as a third player** | Join a full game to disrupt it | Server checks both socket slots and rejects with "Game is full" if both are occupied. |
+| **Forge game state in Redis** | Directly modify Redis to alter boards/shots/winner | Requires access to the Redis instance, which is only reachable from the Railway private network. Not a client-side vector. |
 
 ### Remaining Vectors
 
-- **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking info over many observations.
-- **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens.
+- **Timing side-channel:** Hit vs miss processing has slightly different code paths, theoretically leaking information over many observations. Mitigation: the difference is microseconds over a WebSocket round-trip — noise dominates signal.
+- **Player accounts:** For competitive play, add proper auth (accounts + JWT/session cookies) instead of ephemeral tokens. Currently there's no way to ban a player across games.
 
 ### Why Ephemeral Tokens Over JWT/Accounts
 
