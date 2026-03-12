@@ -7,12 +7,11 @@ const gameStore = require('./gameStore');
 
 function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
-const disconnectTimers = {}; // gameId:playerId -> timeout handle
+const disconnectTimers = {};
 
 const RATE_LIMIT = { maxPerSec: 5 };
 const DISCONNECT_GRACE_MS = 45000;
 
-// Convert sparse shot Map to dense 2D array for client rendering
 function shotMapToArray(map) {
   const arr = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   if (!(map instanceof Map)) return arr;
@@ -37,6 +36,7 @@ function registerSocketHandlers(io) {
       next();
     });
 
+    // No lock needed — new game, no contention
     socket.on('create-ai-game', async () => {
       const id = uuidv4();
       const token = generateToken();
@@ -71,107 +71,124 @@ function registerSocketHandlers(io) {
     });
 
     socket.on('join-game', async ({ gameId }) => {
-      const game = await gameStore.getGame(gameId);
-      if (!game) return socket.emit('error-msg', 'Game not found');
-      if (game.mode !== 'mp') return socket.emit('error-msg', 'Not a multiplayer game');
-      if (game.sockets.p1 && game.sockets.p2 && game.sockets.p1 !== socket.id && game.sockets.p2 !== socket.id)
-        return socket.emit('error-msg', 'Game is full');
-      const playerId = game.tokens?.p1 ? 'p2' : 'p1';
-      const token = generateToken();
-      game.tokens = game.tokens || {};
-      game.tokens[playerId] = token;
-      game.sockets[playerId] = socket.id;
-      await gameStore.saveGame(game);
-      socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
-      socket.emit('game-joined', { gameId, playerId, token });
-      io.to(gameId).emit('player-joined', { playerId });
+      await gameStore.withLock(gameId, async () => {
+        const game = await gameStore.getGame(gameId);
+        if (!game) return socket.emit('error-msg', 'Game not found');
+        if (game.mode !== 'mp') return socket.emit('error-msg', 'Not a multiplayer game');
+        if (game.sockets.p1 && game.sockets.p2 && game.sockets.p1 !== socket.id && game.sockets.p2 !== socket.id)
+          return socket.emit('error-msg', 'Game is full');
+        const playerId = game.tokens?.p1 ? 'p2' : 'p1';
+        const token = generateToken();
+        game.tokens = game.tokens || {};
+        game.tokens[playerId] = token;
+        game.sockets[playerId] = socket.id;
+        await gameStore.saveGame(game);
+        socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
+        socket.emit('game-joined', { gameId, playerId, token });
+        io.to(gameId).emit('player-joined', { playerId });
+      });
     });
 
     socket.on('rejoin', async ({ gameId, playerId, token }) => {
-      const game = await gameStore.getGame(gameId);
-      if (!game) return socket.emit('error-msg', 'Game not found');
-      if (!game.tokens || game.tokens[playerId] !== token)
-        return socket.emit('error-msg', 'Invalid session');
-      const timerKey = `${gameId}:${playerId}`;
-      if (disconnectTimers[timerKey]) { clearTimeout(disconnectTimers[timerKey]); delete disconnectTimers[timerKey]; }
-      game.sockets[playerId] = socket.id;
-      await gameStore.saveGame(game);
-      socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
-      io.to(gameId).emit('player-reconnected', { playerId });
-      const opponent = playerId === 'p1' ? 'p2' : 'p1';
-      socket.emit('rejoin-state', {
-        phase: game.phase, turn: game.turn, myShips: game.ships[playerId],
-        myShots: shotMapToArray(game.shots[playerId]), incomingShots: shotMapToArray(game.shots[opponent]),
-        winner: game.winner, mode: game.mode,
-        waitingForOpponent: game.mode === 'mp' && !game.sockets[opponent],
+      await gameStore.withLock(gameId, async () => {
+        const game = await gameStore.getGame(gameId);
+        if (!game) return socket.emit('error-msg', 'Game not found');
+        if (!game.tokens || game.tokens[playerId] !== token)
+          return socket.emit('error-msg', 'Invalid session');
+        const timerKey = `${gameId}:${playerId}`;
+        if (disconnectTimers[timerKey]) { clearTimeout(disconnectTimers[timerKey]); delete disconnectTimers[timerKey]; }
+        game.sockets[playerId] = socket.id;
+        await gameStore.saveGame(game);
+        socket.join(gameId); socket.gameId = gameId; socket.playerId = playerId;
+        io.to(gameId).emit('player-reconnected', { playerId });
+        const opponent = playerId === 'p1' ? 'p2' : 'p1';
+        socket.emit('rejoin-state', {
+          phase: game.phase, turn: game.turn, myShips: game.ships[playerId],
+          myShots: shotMapToArray(game.shots[playerId]), incomingShots: shotMapToArray(game.shots[opponent]),
+          winner: game.winner, mode: game.mode,
+          waitingForOpponent: game.mode === 'mp' && !game.sockets[opponent],
+        });
       });
     });
 
     socket.on('place-ships', async ({ ships }) => {
-      const game = await gameStore.getGame(socket.gameId);
-      if (!game || game.phase !== 'placement') return;
-      const pid = socket.playerId;
-      if (game.ships[pid]) return socket.emit('error-msg', 'Already placed');
-      if (!validatePlacement(ships)) return socket.emit('error-msg', 'Invalid placement');
-      game.ships[pid] = ships;
-      game.boards[pid] = buildShipMap(ships);
-      game.ready[pid] = true;
-      socket.emit('ships-placed');
-      const bothReady = game.mode === 'ai' ? game.ready.p1 : game.ready.p1 && game.ready.p2;
-      if (bothReady) {
-        game.phase = 'firing'; game.turn = 'p1';
-        console.log(`[place-ships] Both ready, transitioning to firing`);
-        io.to(game.id).emit('phase-change', { phase: 'firing', turn: 'p1' });
-      }
-      await gameStore.saveGame(game);
-      stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+      const gid = socket.gameId;
+      if (!gid) return;
+      await gameStore.withLock(gid, async () => {
+        const game = await gameStore.getGame(gid);
+        if (!game || game.phase !== 'placement') return;
+        const pid = socket.playerId;
+        if (game.ships[pid]) return socket.emit('error-msg', 'Already placed');
+        if (!validatePlacement(ships)) return socket.emit('error-msg', 'Invalid placement');
+        game.ships[pid] = ships;
+        game.boards[pid] = buildShipMap(ships);
+        game.ready[pid] = true;
+        socket.emit('ships-placed');
+        const bothReady = game.mode === 'ai' ? game.ready.p1 : game.ready.p1 && game.ready.p2;
+        if (bothReady) {
+          game.phase = 'firing'; game.turn = 'p1';
+          io.to(game.id).emit('phase-change', { phase: 'firing', turn: 'p1' });
+        }
+        await gameStore.saveGame(game);
+        stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+      });
     });
 
     socket.on('fire', async ({ x, y }) => {
-      const game = await gameStore.getGame(socket.gameId);
-      if (!game || game.phase !== 'firing') return;
-      const pid = socket.playerId;
-      if (game.turn !== pid) return socket.emit('error-msg', 'Not your turn');
-      const result = processShot(game, pid, x, y);
-      if (result.error) return socket.emit('error-msg', result.error);
-      await gameStore.saveGame(game);
-      io.to(game.id).emit('shot-result', { player: pid, x, y, result: result.result, sunk: result.sunk, winner: result.winner });
-      if (result.winner) await gameStore.deleteGame(game.id);
-      if (!result.winner && game.mode === 'ai' && game.turn === 'p2') {
-        setTimeout(async () => {
-          const g = await gameStore.getGame(game.id);
-          if (!g) return;
-          const aiResult = aiTakeTurn(g);
-          await gameStore.saveGame(g);
-          io.to(g.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
-          if (aiResult.winner) await gameStore.deleteGame(g.id);
-        }, 500);
-      }
+      const gid = socket.gameId;
+      if (!gid) return;
+      await gameStore.withLock(gid, async () => {
+        const game = await gameStore.getGame(gid);
+        if (!game || game.phase !== 'firing') return;
+        const pid = socket.playerId;
+        if (game.turn !== pid) return socket.emit('error-msg', 'Not your turn');
+        const result = processShot(game, pid, x, y);
+        if (result.error) return socket.emit('error-msg', result.error);
+        await gameStore.saveGame(game);
+        io.to(game.id).emit('shot-result', { player: pid, x, y, result: result.result, sunk: result.sunk, winner: result.winner });
+        if (result.winner) await gameStore.deleteGame(game.id);
+        if (!result.winner && game.mode === 'ai' && game.turn === 'p2') {
+          setTimeout(async () => {
+            await gameStore.withLock(gid, async () => {
+              const g = await gameStore.getGame(gid);
+              if (!g) return;
+              const aiResult = aiTakeTurn(g);
+              await gameStore.saveGame(g);
+              io.to(g.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
+              if (aiResult.winner) await gameStore.deleteGame(g.id);
+            });
+          }, 500);
+        }
+      });
     });
 
     socket.on('forfeit', async ({ gameId, playerId }) => {
-      const game = await gameStore.getGame(gameId);
-      if (!game || game.phase === 'finished') return;
-      const opponent = playerId === 'p1' ? 'p2' : 'p1';
-      game.winner = opponent;
-      game.phase = 'finished';
-      stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
-      await gameStore.deleteGame(gameId);
-      if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
-      socket.leave(gameId);
-      socket.gameId = null;
-      socket.playerId = null;
-      io.to(game.id).emit('player-forfeited', { winner: opponent, forfeiter: playerId });
+      await gameStore.withLock(gameId, async () => {
+        const game = await gameStore.getGame(gameId);
+        if (!game || game.phase === 'finished') return;
+        const opponent = playerId === 'p1' ? 'p2' : 'p1';
+        game.winner = opponent;
+        game.phase = 'finished';
+        stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
+        await gameStore.deleteGame(gameId);
+        if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
+        socket.leave(gameId);
+        socket.gameId = null;
+        socket.playerId = null;
+        io.to(game.id).emit('player-forfeited', { winner: opponent, forfeiter: playerId });
+      });
     });
 
     socket.on('leave-game', async ({ gameId, playerId }) => {
-      const game = await gameStore.getGame(gameId);
-      if (!game) return;
-      if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
-      await gameStore.saveGame(game);
-      socket.leave(gameId);
-      socket.gameId = null;
-      socket.playerId = null;
+      await gameStore.withLock(gameId, async () => {
+        const game = await gameStore.getGame(gameId);
+        if (!game) return;
+        if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
+        await gameStore.saveGame(game);
+        socket.leave(gameId);
+        socket.gameId = null;
+        socket.playerId = null;
+      });
     });
 
     socket.on('disconnect', () => {
@@ -185,14 +202,16 @@ function registerSocketHandlers(io) {
         const timerKey = `${gid}:${pid}`;
         disconnectTimers[timerKey] = setTimeout(async () => {
           delete disconnectTimers[timerKey];
-          const g = await gameStore.getGame(gid);
-          if (!g || g.phase === 'finished') return;
-          const opponent = pid === 'p1' ? 'p2' : 'p1';
-          g.winner = opponent;
-          g.phase = 'finished';
-          stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
-          await gameStore.deleteGame(gid);
-          io.to(g.id).emit('player-forfeited', { winner: opponent, forfeiter: pid });
+          await gameStore.withLock(gid, async () => {
+            const g = await gameStore.getGame(gid);
+            if (!g || g.phase === 'finished') return;
+            const opponent = pid === 'p1' ? 'p2' : 'p1';
+            g.winner = opponent;
+            g.phase = 'finished';
+            stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
+            await gameStore.deleteGame(gid);
+            io.to(g.id).emit('player-forfeited', { winner: opponent, forfeiter: pid });
+          });
         }, DISCONNECT_GRACE_MS);
       });
     });

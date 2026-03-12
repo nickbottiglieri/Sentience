@@ -125,4 +125,17 @@ describe('gameStore (in-memory fallback)', () => {
     const retrieved = await gameStore.getGame('test-id');
     expect(retrieved.sockets.p1).toBeUndefined();
   });
+
+  test('withLock executes callback and returns result (no-op without Redis)', async () => {
+    const result = await gameStore.withLock('test-id', async () => {
+      return 'done';
+    });
+    expect(result).toBe('done');
+  });
+
+  test('withLock propagates errors from callback', async () => {
+    await expect(
+      gameStore.withLock('test-id', async () => { throw new Error('boom'); })
+    ).rejects.toThrow('boom');
+  });
 });

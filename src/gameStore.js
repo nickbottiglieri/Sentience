@@ -59,6 +59,33 @@ async function deleteGame(id) {
   delete socketMap[id];
 }
 
+const LOCK_TTL = 5000; // 5s auto-expire to prevent deadlocks
+const LOCK_RETRY_DELAY = 50;
+const LOCK_MAX_RETRIES = 20;
+
+async function acquireLock(gameId) {
+  if (!redis) return true; // no-op in single-process mode
+  const lockKey = `lock:${gameId}`;
+  for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
+    const acquired = await redis.set(lockKey, '1', 'PX', LOCK_TTL, 'NX');
+    if (acquired) return true;
+    await new Promise(r => setTimeout(r, LOCK_RETRY_DELAY));
+  }
+  console.error(`Failed to acquire lock for game ${gameId}`);
+  return false;
+}
+
+async function releaseLock(gameId) {
+  if (!redis) return;
+  await redis.del(`lock:${gameId}`);
+}
+
+async function withLock(gameId, fn) {
+  if (!await acquireLock(gameId)) throw new Error('Lock timeout');
+  try { return await fn(); }
+  finally { await releaseLock(gameId); }
+}
+
 function getRedisClient() { return redis; }
 
-module.exports = { init, getGame, saveGame, deleteGame, getRedisClient };
+module.exports = { init, getGame, saveGame, deleteGame, getRedisClient, withLock };
