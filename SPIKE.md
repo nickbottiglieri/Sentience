@@ -2,6 +2,8 @@
 
 Research spike exploring what it takes to scale a real-time Socket.IO game server horizontally. Started with a single-process Node.js server, ended with a Redis-coordinated multi-instance architecture backed by Postgres, with load test data identifying the bottleneck.
 
+**Platform constraints:** All testing and deployment runs on Railway's free tier, which imposes resource limits on CPU, memory, and database performance. Postgres and Redis are shared managed instances — not dedicated hardware. In production, both could be scaled vertically (larger Postgres instances handle tens of thousands of concurrent connections; Redis can sustain 100k+ ops/sec on dedicated hardware). The bottlenecks identified in this spike are specific to the free-tier resource envelope. The goal was to maximize what a single instance can handle within these constraints, and to prove the architecture scales horizontally when vertical limits are reached.
+
 ## Architecture
 
 ```
