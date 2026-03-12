@@ -3,12 +3,12 @@ const {
   buildShipMap, createShotMap, serializeGame, restoreGame, processShot,
 } = require('../src/game');
 
-// Mock db so SQLite doesn't open during tests
+// Mock db so Postgres doesn't connect during tests
 jest.mock('../src/db', () => ({
   stmts: {
-    insertMove: { run: jest.fn() },
-    updateGame: { run: jest.fn() },
-    saveState: { run: jest.fn() },
+    insertMove: { run: jest.fn().mockResolvedValue() },
+    updateGame: { run: jest.fn().mockResolvedValue() },
+    saveState: { run: jest.fn().mockResolvedValue() },
   },
 }));
 
@@ -167,9 +167,9 @@ describe('processShot', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  test('registers a miss', () => {
+  test('registers a miss', async () => {
     const game = makeGame();
-    const result = processShot(game, 'p1', 9, 9);
+    const result = await processShot(game, 'p1', 9, 9);
     expect(result.result).toBe('miss');
     expect(result.sunk).toBeNull();
     expect(result.winner).toBeNull();
@@ -177,25 +177,25 @@ describe('processShot', () => {
     expect(game.turn).toBe('p2');
   });
 
-  test('registers a hit', () => {
+  test('registers a hit', async () => {
     const game = makeGame();
-    const result = processShot(game, 'p1', 0, 0); // hits Carrier
+    const result = await processShot(game, 'p1', 0, 0); // hits Carrier
     expect(result.result).toBe('hit');
     expect(result.sunk).toBeNull();
     expect(game.hits.p1[0]).toBe(1);
   });
 
-  test('sinks a ship', () => {
+  test('sinks a ship', async () => {
     const game = makeGame();
     // Sink the Destroyer (index 4, size 2) at (0,4) and (1,4)
-    processShot(game, 'p1', 0, 4);
+    await processShot(game, 'p1', 0, 4);
     game.turn = 'p1'; // force turn back
-    const result = processShot(game, 'p1', 1, 4);
+    const result = await processShot(game, 'p1', 1, 4);
     expect(result.result).toBe('hit');
     expect(result.sunk).toBe('Destroyer');
   });
 
-  test('detects winner when all ships sunk', () => {
+  test('detects winner when all ships sunk', async () => {
     const game = makeGame();
     // Sink every p2 ship cell
     const allCells = [];
@@ -205,31 +205,31 @@ describe('processShot', () => {
     });
     for (const { x, y } of allCells) {
       game.turn = 'p1';
-      processShot(game, 'p1', x, y);
+      await processShot(game, 'p1', x, y);
     }
     expect(game.winner).toBe('p1');
     expect(game.phase).toBe('finished');
   });
 
-  test('rejects duplicate shot', () => {
+  test('rejects duplicate shot', async () => {
     const game = makeGame();
-    processShot(game, 'p1', 5, 5);
+    await processShot(game, 'p1', 5, 5);
     game.turn = 'p1';
-    const result = processShot(game, 'p1', 5, 5);
+    const result = await processShot(game, 'p1', 5, 5);
     expect(result.error).toBe('Already fired there');
   });
 
-  test('rejects out-of-bounds shot', () => {
+  test('rejects out-of-bounds shot', async () => {
     const game = makeGame();
-    expect(processShot(game, 'p1', -1, 0).error).toBe('Out of bounds');
-    expect(processShot(game, 'p1', 10, 0).error).toBe('Out of bounds');
-    expect(processShot(game, 'p1', 0, -1).error).toBe('Out of bounds');
-    expect(processShot(game, 'p1', 0, 10).error).toBe('Out of bounds');
+    expect((await processShot(game, 'p1', -1, 0)).error).toBe('Out of bounds');
+    expect((await processShot(game, 'p1', 10, 0)).error).toBe('Out of bounds');
+    expect((await processShot(game, 'p1', 0, -1)).error).toBe('Out of bounds');
+    expect((await processShot(game, 'p1', 0, 10)).error).toBe('Out of bounds');
   });
 
-  test('records move to SQLite', () => {
+  test('records move to database', async () => {
     const game = makeGame();
-    processShot(game, 'p1', 9, 9);
+    await processShot(game, 'p1', 9, 9);
     expect(stmts.insertMove.run).toHaveBeenCalledWith('test-id', 'p1', 9, 9, 'miss', 1);
   });
 });

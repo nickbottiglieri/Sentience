@@ -80,7 +80,7 @@ function restoreGame(row) {
   };
 }
 
-function processShot(game, player, x, y) {
+async function processShot(game, player, x, y) {
   const opponent = player === 'p1' ? 'p2' : 'p1';
   const opBoard = game.boards[opponent];
   const shotMap = game.shots[player];
@@ -103,16 +103,16 @@ function processShot(game, player, x, y) {
   }
 
   game.turnCount++;
-  stmts.insertMove.run(game.id, player, x, y, sunk ? `sunk:${sunk}` : result, game.turnCount);
+  await stmts.insertMove.run(game.id, player, x, y, sunk ? `sunk:${sunk}` : result, game.turnCount);
 
   const allSunk = SHIPS.every((s, i) => game.hits[player][i] === s.size);
   if (allSunk) {
     game.winner = player;
     game.phase = 'finished';
-    stmts.updateGame.run(JSON.stringify(serializeGame(game)), player, game.id);
+    await stmts.updateGame.run(JSON.stringify(serializeGame(game)), player, game.id);
   } else {
     game.turn = opponent;
-    stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+    await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
   }
 
   return { result, sunk, winner: game.winner || null };

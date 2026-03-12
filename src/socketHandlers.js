@@ -48,7 +48,7 @@ function registerSocketHandlers(io) {
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {}, aiState: null,
         tokens: { p1: token },
       };
-      stmts.createGame.run(id, 'ai', JSON.stringify(serializeGame(game)));
+      await stmts.createGame.run(id, 'ai', JSON.stringify(serializeGame(game)));
       await gameStore.saveGame(game);
       socket.join(id); socket.gameId = id; socket.playerId = 'p1';
       socket.emit('game-created', { gameId: id, playerId: 'p1', token });
@@ -64,7 +64,7 @@ function registerSocketHandlers(io) {
         turnCount: 0, winner: null, sockets: { p1: socket.id }, ready: {},
         tokens: { p1: token },
       };
-      stmts.createGame.run(id, 'mp', JSON.stringify(serializeGame(game)));
+      await stmts.createGame.run(id, 'mp', JSON.stringify(serializeGame(game)));
       await gameStore.saveGame(game);
       socket.join(id); socket.gameId = id; socket.playerId = 'p1';
       socket.emit('game-created', { gameId: id, playerId: 'p1', token });
@@ -130,7 +130,7 @@ function registerSocketHandlers(io) {
           io.to(game.id).emit('phase-change', { phase: 'firing', turn: 'p1' });
         }
         await gameStore.saveGame(game);
-        stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+        await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
       });
     });
 
@@ -142,7 +142,7 @@ function registerSocketHandlers(io) {
         if (!game || game.phase !== 'firing') return;
         const pid = socket.playerId;
         if (game.turn !== pid) return socket.emit('error-msg', 'Not your turn');
-        const result = processShot(game, pid, x, y);
+        const result = await processShot(game, pid, x, y);
         if (result.error) return socket.emit('error-msg', result.error);
         await gameStore.saveGame(game);
         io.to(game.id).emit('shot-result', { player: pid, x, y, result: result.result, sunk: result.sunk, winner: result.winner });
@@ -152,7 +152,7 @@ function registerSocketHandlers(io) {
             await gameStore.withLock(gid, async () => {
               const g = await gameStore.getGame(gid);
               if (!g) return;
-              const aiResult = aiTakeTurn(g);
+              const aiResult = await aiTakeTurn(g);
               await gameStore.saveGame(g);
               io.to(g.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
               if (aiResult.winner) await gameStore.deleteGame(g.id);
@@ -169,7 +169,7 @@ function registerSocketHandlers(io) {
         const opponent = playerId === 'p1' ? 'p2' : 'p1';
         game.winner = opponent;
         game.phase = 'finished';
-        stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
+        await stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
         await gameStore.deleteGame(gameId);
         if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
         socket.leave(gameId);
@@ -208,7 +208,7 @@ function registerSocketHandlers(io) {
             const opponent = pid === 'p1' ? 'p2' : 'p1';
             g.winner = opponent;
             g.phase = 'finished';
-            stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
+            await stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
             await gameStore.deleteGame(gid);
             io.to(g.id).emit('player-forfeited', { winner: opponent, forfeiter: pid });
           });

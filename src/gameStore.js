@@ -34,7 +34,7 @@ async function getGame(id) {
   }
   // Fall back to SQLite
   if (!game) {
-    const row = stmts.getGame.get(id);
+    const row = await stmts.getGame.get(id);
     if (row && row.state) game = restoreGame(row);
   }
   if (!game) return null;

@@ -57,7 +57,7 @@ function initAiState() {
   return { mode: 'hunt', targets: [], tried: new Set(), huntPool: buildHuntPool() };
 }
 
-function aiTakeTurn(game) {
+async function aiTakeTurn(game) {
   if (!game.aiState) game.aiState = initAiState();
   const state = game.aiState;
 
@@ -88,7 +88,7 @@ function aiTakeTurn(game) {
   }
 
   state.tried.add(key(x, y));
-  const result = processShot(game, 'p2', x, y);
+  const result = await processShot(game, 'p2', x, y);
 
   if (result.result === 'hit' && !result.sunk) {
     state.mode = 'target';
@@ -107,7 +107,7 @@ function aiTakeTurn(game) {
 
   // Serialize for persistence
   game.aiState = { mode: state.mode, targets: state.targets, tried: [...state.tried], huntPool: state.huntPool };
-  stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+  await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
 
   return { x, y, ...result };
 }

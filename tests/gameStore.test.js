@@ -1,9 +1,9 @@
 jest.mock('../src/db', () => ({
   stmts: {
-    getGame: { get: jest.fn() },
-    insertMove: { run: jest.fn() },
-    updateGame: { run: jest.fn() },
-    saveState: { run: jest.fn() },
+    getGame: { get: jest.fn().mockResolvedValue(null) },
+    insertMove: { run: jest.fn().mockResolvedValue() },
+    updateGame: { run: jest.fn().mockResolvedValue() },
+    saveState: { run: jest.fn().mockResolvedValue() },
   },
 }));
 
@@ -26,10 +26,10 @@ beforeEach(() => {
   jest.resetModules();
   jest.mock('../src/db', () => ({
     stmts: {
-      getGame: { get: jest.fn() },
-      insertMove: { run: jest.fn() },
-      updateGame: { run: jest.fn() },
-      saveState: { run: jest.fn() },
+      getGame: { get: jest.fn().mockResolvedValue(null) },
+      insertMove: { run: jest.fn().mockResolvedValue() },
+      updateGame: { run: jest.fn().mockResolvedValue() },
+      saveState: { run: jest.fn().mockResolvedValue() },
     },
   }));
   gameStore = require('../src/gameStore');
@@ -65,15 +65,11 @@ describe('gameStore (in-memory fallback)', () => {
   });
 
   test('returns null for unknown game', async () => {
-    const { stmts } = require('../src/db');
-    stmts.getGame.get.mockReturnValue(null);
     const result = await gameStore.getGame('nonexistent');
     expect(result).toBeNull();
   });
 
   test('deleteGame removes game', async () => {
-    const { stmts } = require('../src/db');
-    stmts.getGame.get.mockReturnValue(null);
     const game = makeGame();
     await gameStore.saveGame(game);
     await gameStore.deleteGame('test-id');
@@ -95,7 +91,7 @@ describe('gameStore (in-memory fallback)', () => {
     const { stmts } = require('../src/db');
     const game = makeGame();
     const serialized = JSON.stringify(serializeGame(game));
-    stmts.getGame.get.mockReturnValue({ id: 'test-id', mode: 'ai', state: serialized });
+    stmts.getGame.get.mockResolvedValue({ id: 'test-id', mode: 'ai', state: serialized });
     const retrieved = await gameStore.getGame('test-id');
     expect(retrieved).not.toBeNull();
     expect(retrieved.phase).toBe('firing');
@@ -112,8 +108,6 @@ describe('gameStore (in-memory fallback)', () => {
   });
 
   test('deleteGame clears socket state', async () => {
-    const { stmts } = require('../src/db');
-    stmts.getGame.get.mockReturnValue(null);
     const game = makeGame();
     game.sockets = { p1: 'sock1' };
     await gameStore.saveGame(game);

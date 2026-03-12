@@ -1,8 +1,8 @@
 jest.mock('../src/db', () => ({
   stmts: {
-    insertMove: { run: jest.fn() },
-    updateGame: { run: jest.fn() },
-    saveState: { run: jest.fn() },
+    insertMove: { run: jest.fn().mockResolvedValue() },
+    updateGame: { run: jest.fn().mockResolvedValue() },
+    saveState: { run: jest.fn().mockResolvedValue() },
   },
 }));
 
@@ -50,25 +50,25 @@ describe('aiTakeTurn', () => {
     };
   }
 
-  test('never fires on the same cell twice', () => {
+  test('never fires on the same cell twice', async () => {
     const game = makeGame();
     const fired = new Set();
     for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
       if (game.winner) break;
       game.turn = 'p2';
-      const { x, y } = aiTakeTurn(game);
+      const { x, y } = await aiTakeTurn(game);
       const k = key(x, y);
       expect(fired.has(k)).toBe(false);
       fired.add(k);
     }
   });
 
-  test('all shots are within bounds', () => {
+  test('all shots are within bounds', async () => {
     const game = makeGame();
     for (let i = 0; i < 30; i++) {
       if (game.winner) break;
       game.turn = 'p2';
-      const { x, y } = aiTakeTurn(game);
+      const { x, y } = await aiTakeTurn(game);
       expect(x).toBeGreaterThanOrEqual(0);
       expect(x).toBeLessThan(BOARD_SIZE);
       expect(y).toBeGreaterThanOrEqual(0);
@@ -76,28 +76,28 @@ describe('aiTakeTurn', () => {
     }
   });
 
-  test('eventually sinks all ships', () => {
+  test('eventually sinks all ships', async () => {
     const game = makeGame();
     for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
       if (game.winner) break;
       game.turn = 'p2';
-      aiTakeTurn(game);
+      await aiTakeTurn(game);
     }
     expect(game.winner).toBe('p2');
   });
 
-  test('survives aiState serialization round-trip', () => {
+  test('survives aiState serialization round-trip', async () => {
     const game = makeGame();
     // Take a few turns
     for (let i = 0; i < 5; i++) {
       game.turn = 'p2';
-      aiTakeTurn(game);
+      await aiTakeTurn(game);
     }
     // Simulate persistence round-trip (aiState gets JSON serialized/parsed)
     game.aiState = JSON.parse(JSON.stringify(game.aiState));
     // Should continue without error or duplicate shots
     game.turn = 'p2';
-    const { x, y } = aiTakeTurn(game);
+    const { x, y } = await aiTakeTurn(game);
     expect(x).toBeGreaterThanOrEqual(0);
     expect(x).toBeLessThan(BOARD_SIZE);
   });

@@ -144,9 +144,9 @@ Battleship is inherently low-contention — turn-based games rarely produce simu
 
 #### Load Testing
 
-Custom load test script (`loadtest/run.js`) simulates concurrent AI game lifecycles over Socket.IO, measuring shot-result latency end-to-end. Nginx round-robins traffic across two Node processes, replicating the same topology Railway uses with multiple replicas. We tested with 2 processes because that's the minimum needed to prove cross-process coordination — Redis state store, Socket.IO adapter, and distributed locking all get exercised.
+Custom load test script (`loadtest/run.js`) simulates concurrent AI game lifecycles over Socket.IO, measuring shot-result latency end-to-end against the production Railway deployment. Each test game is a single Socket.IO connection that creates a game, places ships, and exchanges shots with the server-side AI. Multiplayer games would use 2 connections per game, so real-world connection capacity is roughly half the AI game count — though server-side compute per shot is nearly identical.
 
-**Baseline results (2 processes, nginx, Redis, AI delay disabled):**
+**Baseline (1 Railway instance, AI delay disabled):**
 
 | Metric | Value |
 |---|---|
@@ -154,26 +154,41 @@ Custom load test script (`loadtest/run.js`) simulates concurrent AI game lifecyc
 | Rounds | 3 |
 | Total games completed | 150 / 150 |
 | Errors | 0 |
-| Total shots processed | 9,123 |
-| Shot latency p50 | 8ms |
-| Shot latency p95 | 22ms |
-| Shot latency p99 | 28ms |
-| Min / Max latency | 0ms / 67ms |
+| Total shots processed | 9,467 |
+| Shot latency p50 | 88ms |
+| Shot latency p95 | 103ms |
+| Shot latency p99 | 151ms |
+| Min / Max latency | 82ms / 305ms |
 
-All 150 games completed with zero errors — no lost shots, no state corruption, no lock timeouts. Latency stayed flat across all 3 rounds, indicating no degradation under sustained load.
+All 150 games completed with zero errors. Latency stayed flat across all 3 rounds — no degradation under sustained load. The ~88ms floor is network round-trip time from the test client to Railway.
 
-**Stress test — finding the breaking point:**
+**Stress test — single instance breaking point:**
 
 | Concurrent Games | Completed | Errors | p50 | p95 | p99 | Max |
 |---|---|---|---|---|---|---|
-| 50 | 50/50 | 0 | 8ms | 22ms | 28ms | 67ms |
-| 100 | 100/100 | 0 | 10ms | 24ms | 30ms | 38ms |
-| 120 | 120/120 | 0 | 11ms | 31ms | 41ms | 68ms |
-| 130 | 124/130 | 6 | 8ms | 25ms | 34ms | 56ms |
-| 150 | 124/150 | 26 | 9ms | 27ms | 36ms | 49ms |
-| 200 | 124/200 | 76 | 13ms | 33ms | 41ms | 61ms |
+| 50 (×3) | 150/150 | 0 | 88ms | 103ms | 151ms | 305ms |
+| 100 | 100/100 | 0 | 91ms | 137ms | 180ms | 237ms |
+| 150 | 150/150 | 0 | 89ms | 125ms | 149ms | 316ms |
+| 200 | 200/200 | 0 | 92ms | 145ms | 186ms | 269ms |
+| 400 | 365/400 | 35 | 151ms | 300ms | 434ms | 630ms |
+| 800 | 76/800 | 724 | 417ms | 620ms | 757ms | 814ms |
 
-The system sustains ~120 concurrent games across 2 processes with zero errors and p99 under 41ms. Beyond 130, games start timing out (60s limit) — the bottleneck is connection throughput on a local machine, not state corruption or lock contention. Latency remains stable even under failure, confirming the system degrades gracefully rather than catastrophically.
+A single Railway instance handles ~200 concurrent AI games with zero errors and p99 under 200ms. At 400, latency doubles and 9% of games time out. At 800, the instance is overwhelmed (90% errors). The system degrades gracefully — errors are 60s timeouts, not state corruption or data loss.
+
+**Unit capacity:** ~200 concurrent AI games per instance (or ~100 multiplayer games, since each uses 2 connections). Using a conservative estimate of 200 games/instance as the safe operating ceiling.
+
+**Capacity planning for 5,000 concurrent games:**
+
+| | AI games | Multiplayer games |
+|---|---|---|
+| Target concurrency | 5,000 | 5,000 |
+| 2× headroom for spikes | 10,000 | 10,000 |
+| Connections per game | 1 | 2 |
+| Total connections | 10,000 | 20,000 |
+| Safe capacity per instance | 200 games | 100 games |
+| Instances required | 50 | 100 |
+
+To handle 5,000 concurrent games with 2× headroom for traffic spikes: 50 instances for AI-only, 100 for multiplayer-only, or somewhere in between for a mixed workload. Redis is the shared coordination layer — all instances read/write game state through it, so adding instances is purely horizontal. The bottleneck shifts to Redis throughput at this scale, which can be addressed with Redis Cluster or read replicas if needed.
 
 ### Step 11 — Unit Tests
 
