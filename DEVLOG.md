@@ -71,11 +71,7 @@ Added crypto-random session tokens to prevent socket impersonation:
 - Server validates token before allowing reconnection
 - Tokens persisted to SQLite so they survive server restarts
 
-### Step 9 — Multiplayer Rejoin Bugfix
-
-Fixed a bug where refreshing a multiplayer tab with a `?join=` URL param would re-emit `join-game` instead of `rejoin`, causing the server to reject with "Game is full". Session rejoin now takes priority over URL params.
-
-### Step 10 — Sparse Data Structures for Scalable Board Size
+### Step 9 — Sparse Data Structures for Scalable Board Size
 
 Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This makes the game scale to arbitrarily large boards without memory or performance degradation.
 
@@ -86,7 +82,7 @@ Replaced dense O(n²) 2D arrays with sparse Maps for boards and shots. This make
 - Serialization: only persists occupied/shot entries, not entire n² grid
 - Client still receives dense arrays (converted server-side) — no frontend changes needed
 
-### Step 11 — Disconnect Grace Period & Auto-Forfeit
+### Step 10 — Disconnect Grace Period & Auto-Forfeit
 
 Added a 45-second grace period for disconnected multiplayer players:
 
@@ -117,7 +113,7 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Backward compatible:** Without `REDIS_URL`, the app falls back to in-memory storage and behaves identically to before.
 
-### Step 12 — Unit Tests
+### Step 11 — Unit Tests
 
 Added Jest test suite (28 tests) covering the three core modules:
 
