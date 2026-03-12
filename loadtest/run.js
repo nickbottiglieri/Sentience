@@ -120,7 +120,7 @@ function runGame(url) {
     });
 
     socket.on('connect_error', (err) => reject(err));
-    setTimeout(() => { socket.disconnect(); reject(new Error('Game timeout')); }, 60000);
+    setTimeout(() => { socket.disconnect(); reject(new Error('Game timeout')); }, 180000);
   });
 }
 

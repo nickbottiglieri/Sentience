@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
-const { stmts } = require('./db');
+const { stmts, flushGame } = require('./db');
 const { BOARD_SIZE, createShotMap, validatePlacement, buildShipMap, serializeGame, processShot } = require('./game');
 const { aiPlaceShips, aiTakeTurn } = require('./ai');
 const gameStore = require('./gameStore');
@@ -130,7 +130,7 @@ function registerSocketHandlers(io) {
           io.to(game.id).emit('phase-change', { phase: 'firing', turn: 'p1' });
         }
         await gameStore.saveGame(game);
-        await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
+        await gameStore.saveGame(game);
       });
     });
 
@@ -146,7 +146,10 @@ function registerSocketHandlers(io) {
         if (result.error) return socket.emit('error-msg', result.error);
         await gameStore.saveGame(game);
         io.to(game.id).emit('shot-result', { player: pid, x, y, result: result.result, sunk: result.sunk, winner: result.winner });
-        if (result.winner) await gameStore.deleteGame(game.id);
+        if (result.winner) {
+          await flushGame(game, result.winner, JSON.stringify(serializeGame(game)));
+          await gameStore.deleteGame(game.id);
+        }
         if (!result.winner && game.mode === 'ai' && game.turn === 'p2') {
           setTimeout(async () => {
             await gameStore.withLock(gid, async () => {
@@ -155,7 +158,10 @@ function registerSocketHandlers(io) {
               const aiResult = await aiTakeTurn(g);
               await gameStore.saveGame(g);
               io.to(g.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
-              if (aiResult.winner) await gameStore.deleteGame(g.id);
+              if (aiResult.winner) {
+                await flushGame(g, aiResult.winner, JSON.stringify(serializeGame(g)));
+                await gameStore.deleteGame(g.id);
+              }
             });
           }, AI_DELAY_MS);
         }
@@ -169,7 +175,7 @@ function registerSocketHandlers(io) {
         const opponent = playerId === 'p1' ? 'p2' : 'p1';
         game.winner = opponent;
         game.phase = 'finished';
-        await stmts.updateGame.run(JSON.stringify(serializeGame(game)), opponent, game.id);
+        await flushGame(game, opponent, JSON.stringify(serializeGame(game)));
         await gameStore.deleteGame(gameId);
         if (game.sockets[playerId] === socket.id) game.sockets[playerId] = null;
         socket.leave(gameId);
@@ -208,7 +214,7 @@ function registerSocketHandlers(io) {
             const opponent = pid === 'p1' ? 'p2' : 'p1';
             g.winner = opponent;
             g.phase = 'finished';
-            await stmts.updateGame.run(JSON.stringify(serializeGame(g)), opponent, g.id);
+            await flushGame(g, opponent, JSON.stringify(serializeGame(g)));
             await gameStore.deleteGame(gid);
             io.to(g.id).emit('player-forfeited', { winner: opponent, forfeiter: pid });
           });

@@ -1,5 +1,3 @@
-const { stmts } = require('./db');
-
 const SHIPS = [
   { name: 'Carrier', size: 5 },
   { name: 'Battleship', size: 4 },
@@ -53,7 +51,7 @@ function serializeGame(game) {
     shots: { p1: [...game.shots.p1], p2: [...game.shots.p2] },
     hits: game.hits, turnCount: game.turnCount, winner: game.winner,
     aiState: game.aiState || null, mode: game.mode, tokens: game.tokens || null,
-    ready: game.ready || {},
+    ready: game.ready || {}, moveLog: game.moveLog || [],
   };
 }
 
@@ -76,7 +74,7 @@ function restoreGame(row) {
     shots: { p1: restoreShotMap(state.shots.p1), p2: restoreShotMap(state.shots.p2) },
     hits: state.hits, turnCount: state.turnCount || 0, winner: state.winner,
     aiState: state.aiState || null, sockets: {}, ready: state.ready || {},
-    tokens: state.tokens || {},
+    tokens: state.tokens || {}, moveLog: state.moveLog || [],
   };
 }
 
@@ -103,16 +101,15 @@ async function processShot(game, player, x, y) {
   }
 
   game.turnCount++;
-  await stmts.insertMove.run(game.id, player, x, y, sunk ? `sunk:${sunk}` : result, game.turnCount);
+  game.moveLog = game.moveLog || [];
+  game.moveLog.push({ player, x, y, result: sunk ? `sunk:${sunk}` : result, turnNumber: game.turnCount });
 
   const allSunk = SHIPS.every((s, i) => game.hits[player][i] === s.size);
   if (allSunk) {
     game.winner = player;
     game.phase = 'finished';
-    await stmts.updateGame.run(JSON.stringify(serializeGame(game)), player, game.id);
   } else {
     game.turn = opponent;
-    await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
   }
 
   return { result, sunk, winner: game.winner || null };

@@ -78,4 +78,33 @@ const stmts = pool ? {
   getGameMoves: { all: noopAll },
 };
 
-module.exports = { pool, stmts, init };
+async function flushGame(game, winner, serializedState) {
+  if (!pool) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (game.moveLog && game.moveLog.length > 0) {
+      const values = game.moveLog.map((m, i) =>
+        `($1, $${i*4+2}, $${i*4+3}, $${i*4+4}, $${i*4+5}, ${m.turnNumber})`
+      );
+      const params = [game.id];
+      for (const m of game.moveLog) params.push(m.player, m.x, m.y, m.result);
+      await client.query(
+        `INSERT INTO moves (game_id, player, x, y, result, turn_number) VALUES ${values.join(',')}`,
+        params
+      );
+    }
+    await client.query(
+      'UPDATE games SET state = $1, winner = $2, finished_at = NOW() WHERE id = $3',
+      [serializedState, winner, game.id]
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('flushGame error:', e.message);
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { pool, stmts, init, flushGame };

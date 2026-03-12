@@ -1,4 +1,3 @@
-const { stmts } = require('./db');
 const { SHIPS, BOARD_SIZE, key, processShot, serializeGame } = require('./game');
 
 // Fisher-Yates shuffle
@@ -107,7 +106,6 @@ async function aiTakeTurn(game) {
 
   // Serialize for persistence
   game.aiState = { mode: state.mode, targets: state.targets, tried: [...state.tried], huntPool: state.huntPool };
-  await stmts.saveState.run(JSON.stringify(serializeGame(game)), game.id);
 
   return { x, y, ...result };
 }

@@ -227,9 +227,9 @@ describe('processShot', () => {
     expect((await processShot(game, 'p1', 0, 10)).error).toBe('Out of bounds');
   });
 
-  test('records move to database', async () => {
+  test('buffers move in moveLog', async () => {
     const game = makeGame();
     await processShot(game, 'p1', 9, 9);
-    expect(stmts.insertMove.run).toHaveBeenCalledWith('test-id', 'p1', 9, 9, 'miss', 1);
+    expect(game.moveLog).toEqual([{ player: 'p1', x: 9, y: 9, result: 'miss', turnNumber: 1 }]);
   });
 });
