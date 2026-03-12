@@ -96,7 +96,7 @@ Added a 45-second grace period for disconnected multiplayer players:
 
 Researched and implemented Redis-backed horizontal scaling with distributed locking, Postgres migration, load testing, and bottleneck analysis. Full writeup in [SPIKE.md](SPIKE.md).
 
-**Summary:** Single Railway instance handles ~200 concurrent AI games at p99 < 300ms. Postgres is the bottleneck (50-90ms per query under load). Redis, event loop, and memory are all fine. Proposed optimizations (fire-and-forget writes, batch inserts, skip mid-game saveState) would remove Postgres from the critical path and push capacity to 1,000+ games per instance.
+**Summary:** Single Railway instance handles ~1,000 concurrent AI games at p99 < 200ms after removing Postgres from the hot path (batch writes at game end only). Before optimization, the ceiling was ~200 games — Postgres was the bottleneck at 50-90ms per query. Redis, event loop, and memory are all fine. At 100,000 concurrent users with 2× spike headroom, ~300 instances for a mixed workload.
 
 ### Step 11 — Unit Tests
 
