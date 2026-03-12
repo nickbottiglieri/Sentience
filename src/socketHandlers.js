@@ -8,7 +8,7 @@ const gameStore = require('./gameStore');
 function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
 const disconnectTimers = {};
-const RATE_LIMIT = { maxPerSec: 5 };
+const RATE_LIMIT = { maxPerSec: 20 };
 const DISCONNECT_GRACE_MS = 45000;
 const AI_DELAY_MS = parseInt(process.env.AI_DELAY_MS) || 500;
 
