@@ -211,6 +211,17 @@ Railway's Postgres is a managed instance on shared infrastructure. The ~50ms idl
 
 Both are synchronous `await` calls in the shot handler's critical path. Under load, Postgres connection pool contention adds further delay.
 
+**Railway metrics during stress test (before optimization):**
+
+![Postgres metrics — CPU spikes to 0.4 vCPU, memory climbs to 300MB](docs/railway-stress-1.jpg)
+*Postgres: CPU spikes to 0.4 vCPU during the 400-game stress test, memory steadily climbs from ~75MB to 300MB as it handles thousands of individual INSERT/UPDATE queries.*
+
+![Node.js app metrics — CPU peaks at 1.2 vCPU, memory stable at ~100MB](docs/railway-stress-2.jpg)
+*Node.js app: CPU peaks at 1.2 vCPU during the stress tests (12:30–12:45 PM), memory stays stable around 100MB — the app itself isn't the bottleneck.*
+
+![Redis metrics — CPU and memory barely register](docs/railway-stress-3.jpg)
+*Redis: CPU barely registers (< 0.1 vCPU), memory near zero. Redis is not the bottleneck.*
+
 ### Optimization — Batch Postgres Writes to End-of-Game
 
 Rather than leaving these as theoretical proposals, we implemented the most impactful optimization: removing Postgres from the critical path entirely.
@@ -258,6 +269,17 @@ Removing Postgres from the hot path increased single-instance capacity from ~200
 | Memory (RSS) | 71MB | 97MB |
 
 Postgres dropped from 88ms to 7ms under load — it's barely touched during gameplay now.
+
+**Railway metrics during stress test (after optimization):**
+
+![Node.js app post-optimization — CPU peaks at 1.7 vCPU handling 2,000 games, memory peaks at ~150MB](docs/railway-stress-post-1.jpg)
+*Node.js app: CPU peaks at 1.7 vCPU during the 1,500–2,000 game tests (1:15–1:30 PM). The app is now doing all the work — Redis I/O and game logic, no Postgres in the loop.*
+
+![Postgres post-optimization — CPU near zero, memory stable at ~400MB](docs/railway-stress-post-2.jpg)
+*Postgres: CPU is near zero during the stress tests — only brief spikes when games end and batch-flush their moves. Memory stable. Night and day compared to the pre-optimization screenshot.*
+
+![Redis post-optimization — CPU shows small bumps at 0.2 vCPU, memory near zero](docs/railway-stress-post-3.jpg)
+*Redis: Small CPU bumps visible now (0.1–0.2 vCPU) as it handles all live game state. Still well within capacity.*
 
 ### Updated Unit Capacity
 
