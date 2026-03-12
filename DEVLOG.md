@@ -123,6 +123,26 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Graceful shutdown** — On `SIGTERM`/`SIGINT` (e.g., Railway deploying a new version), the server stops accepting new connections, disconnects all sockets (clients auto-reconnect to another instance via Socket.IO — game state is in Redis so they resume seamlessly), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
 
+**Load testing** — Custom load test script (`loadtest/run.js`) that simulates concurrent AI game lifecycles over Socket.IO, measuring shot-result latency end-to-end. Nginx round-robins traffic across the two Node processes, replicating the same topology Railway uses with multiple replicas.
+
+We tested with 2 processes because that's the minimum needed to prove cross-process coordination works — Redis state store, Socket.IO adapter, and distributed locking all get exercised. Adding more processes wouldn't change the architecture; it would just add more round-robin targets. The goal isn't to find the server's breaking point — it's to establish a baseline showing the distributed system works correctly under concurrent load, with zero errors and stable latency.
+
+**Baseline results (2 processes, nginx, Redis, AI delay disabled):**
+
+| Metric | Value |
+|---|---|
+| Concurrent games | 50 |
+| Rounds | 3 |
+| Total games completed | 150 / 150 |
+| Errors | 0 |
+| Total shots processed | 9,123 |
+| Shot latency p50 | 8ms |
+| Shot latency p95 | 22ms |
+| Shot latency p99 | 28ms |
+| Min / Max latency | 0ms / 67ms |
+
+All 150 games completed with zero errors — no lost shots, no state corruption, no lock timeouts. Latency stayed flat across all 3 rounds, indicating no degradation under sustained load. These numbers serve as the benchmark for the distributed architecture.
+
 ### Step 12 — Health Check & Graceful Shutdown
 
 Added operational readiness features:

@@ -8,9 +8,9 @@ const gameStore = require('./gameStore');
 function generateToken() { return crypto.randomBytes(24).toString('hex'); }
 
 const disconnectTimers = {};
-
 const RATE_LIMIT = { maxPerSec: 5 };
 const DISCONNECT_GRACE_MS = 45000;
+const AI_DELAY_MS = parseInt(process.env.AI_DELAY_MS) || 500;
 
 function shotMapToArray(map) {
   const arr = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
@@ -157,7 +157,7 @@ function registerSocketHandlers(io) {
               io.to(g.id).emit('shot-result', { player: 'p2', x: aiResult.x, y: aiResult.y, result: aiResult.result, sunk: aiResult.sunk, winner: aiResult.winner });
               if (aiResult.winner) await gameStore.deleteGame(g.id);
             });
-          }, 500);
+          }, AI_DELAY_MS);
         }
       });
     });
