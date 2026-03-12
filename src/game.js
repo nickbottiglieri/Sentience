@@ -53,6 +53,7 @@ function serializeGame(game) {
     shots: { p1: [...game.shots.p1], p2: [...game.shots.p2] },
     hits: game.hits, turnCount: game.turnCount, winner: game.winner,
     aiState: game.aiState || null, mode: game.mode, tokens: game.tokens || null,
+    ready: game.ready || {},
   };
 }
 
@@ -74,7 +75,7 @@ function restoreGame(row) {
     boards: { p1: restoreBoardMap(state.boards.p1), p2: restoreBoardMap(state.boards.p2) },
     shots: { p1: restoreShotMap(state.shots.p1), p2: restoreShotMap(state.shots.p2) },
     hits: state.hits, turnCount: state.turnCount || 0, winner: state.winner,
-    aiState: state.aiState || null, sockets: {}, ready: {},
+    aiState: state.aiState || null, sockets: {}, ready: state.ready || {},
     tokens: state.tokens || {},
   };
 }

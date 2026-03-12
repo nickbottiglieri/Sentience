@@ -16,11 +16,11 @@ function init() {
 
 // In-memory fallback (also used for socket mappings with Redis)
 const localGames = {};
-// Socket/ready state is ephemeral — always in-memory
-const socketMap = {}; // gameId -> { sockets: {}, ready: {} }
+// Socket state is ephemeral — always in-memory
+const socketMap = {}; // gameId -> { sockets: {} }
 
 function getSocketState(id) {
-  if (!socketMap[id]) socketMap[id] = { sockets: {}, ready: {} };
+  if (!socketMap[id]) socketMap[id] = { sockets: {} };
   return socketMap[id];
 }
 
@@ -38,10 +38,9 @@ async function getGame(id) {
     if (row && row.state) game = restoreGame(row);
   }
   if (!game) return null;
-  // Attach ephemeral socket/ready state
+  // Attach ephemeral socket state
   const ss = getSocketState(id);
   game.sockets = ss.sockets;
-  game.ready = ss.ready;
   return game;
 }
 
@@ -50,7 +49,7 @@ async function saveGame(game) {
   if (redis) await redis.set(`game:${game.id}`, serialized, 'EX', GAME_TTL);
   else localGames[game.id] = game;
   // Persist ephemeral state
-  socketMap[game.id] = { sockets: game.sockets, ready: game.ready };
+  socketMap[game.id] = { sockets: game.sockets };
   return serialized;
 }
 

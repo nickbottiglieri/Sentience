@@ -313,7 +313,7 @@ socket.on('game-created', ({ gameId: gid, playerId: pid, token }) => {
   if (gameMode === 'mp') {
     const link = `${location.origin}?join=${gid}`;
     const el = document.getElementById('share-link');
-    el.innerHTML = `Share this link: <a href="${link}">${link}</a> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">📋 Copy</button>`;
+    el.innerHTML = `Game ID: <strong>${gid}</strong> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${gid}', this)">📋 Copy ID</button> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">🔗 Copy Link</button>`;
     el.classList.remove('hidden');
     setStatus('Waiting for opponent to join...');
   }
@@ -386,6 +386,10 @@ socket.on('shot-result', ({ player, x, y, result, sunk, winner }) => {
     sessionStorage.removeItem('gameId');
     sessionStorage.removeItem('playerId');
     sessionStorage.removeItem('sessionToken');
+    gameId = null;
+    playerId = null;
+    clearReturnTimer();
+    updateReturnButton();
   } else {
     const nextTurn = player === 'p1' ? 'p2' : 'p1';
     updateTurnDisplay(nextTurn);
@@ -411,7 +415,7 @@ socket.on(
     if (waitingForOpponent) {
       const link = `${location.origin}?join=${gameId}`;
       const el = document.getElementById('share-link');
-      el.innerHTML = `Share this link: <a href="${link}">${link}</a> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">📋 Copy</button>`;
+      el.innerHTML = `Game ID: <strong>${gameId}</strong> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${gameId}', this)">📋 Copy ID</button> <button class="btn btn-small copy-btn" onclick="copyToClipboard('${link}', this)">🔗 Copy Link</button>`;
       el.classList.remove('hidden');
     }
     if (winner) {
@@ -423,6 +427,13 @@ socket.on(
         ? '🎉 You Win!'
         : '😞 You Lose';
       document.getElementById('win-overlay').classList.remove('hidden');
+      sessionStorage.removeItem('gameId');
+      sessionStorage.removeItem('playerId');
+      sessionStorage.removeItem('sessionToken');
+      gameId = null;
+      playerId = null;
+      clearReturnTimer();
+      updateReturnButton();
     } else if (p === 'firing') {
       showScreen('game-screen');
       startFiring();
@@ -454,13 +465,15 @@ socket.on('player-forfeited', ({ winner, forfeiter }) => {
   if (forfeiter === playerId && phase === 'menu') return; // stale event from old game
   phase = 'finished';
   clearReturnTimer();
-  updateReturnButton();
   const won = winner === playerId;
   document.getElementById('win-text').textContent = won ? '🎉 Opponent Forfeited — You Win!' : '🏳️ You Forfeited';
   document.getElementById('win-overlay').classList.remove('hidden');
   sessionStorage.removeItem('gameId');
   sessionStorage.removeItem('playerId');
   sessionStorage.removeItem('sessionToken');
+  gameId = null;
+  playerId = null;
+  updateReturnButton();
 });
 
 socket.on('error-msg', (msg) => setStatus(`⚠️ ${msg}`));

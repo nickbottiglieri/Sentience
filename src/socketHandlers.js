@@ -76,7 +76,7 @@ function registerSocketHandlers(io) {
       if (game.mode !== 'mp') return socket.emit('error-msg', 'Not a multiplayer game');
       if (game.sockets.p1 && game.sockets.p2 && game.sockets.p1 !== socket.id && game.sockets.p2 !== socket.id)
         return socket.emit('error-msg', 'Game is full');
-      const playerId = game.sockets.p1 ? 'p2' : 'p1';
+      const playerId = game.tokens?.p1 ? 'p2' : 'p1';
       const token = generateToken();
       game.tokens = game.tokens || {};
       game.tokens[playerId] = token;
@@ -120,6 +120,7 @@ function registerSocketHandlers(io) {
       const bothReady = game.mode === 'ai' ? game.ready.p1 : game.ready.p1 && game.ready.p2;
       if (bothReady) {
         game.phase = 'firing'; game.turn = 'p1';
+        console.log(`[place-ships] Both ready, transitioning to firing`);
         io.to(game.id).emit('phase-change', { phase: 'firing', turn: 'p1' });
       }
       await gameStore.saveGame(game);

@@ -114,6 +114,24 @@ describe('serialize/restore round-trip', () => {
     expect(restored.tokens.p1).toBe('tok1');
   });
 
+  test('round-trips ready state', () => {
+    const game = makeGame();
+    game.ready = { p1: true };
+    const serialized = JSON.stringify(serializeGame(game));
+    const restored = restoreGame({ id: 'test-id', mode: 'mp', state: serialized });
+    expect(restored.ready.p1).toBe(true);
+    expect(restored.ready.p2).toBeUndefined();
+  });
+
+  test('round-trips tokens for both players', () => {
+    const game = makeGame();
+    game.tokens = { p1: 'tok1', p2: 'tok2' };
+    const serialized = JSON.stringify(serializeGame(game));
+    const restored = restoreGame({ id: 'test-id', mode: 'mp', state: serialized });
+    expect(restored.tokens.p1).toBe('tok1');
+    expect(restored.tokens.p2).toBe('tok2');
+  });
+
   test('handles null boards gracefully', () => {
     const game = makeGame();
     game.boards.p1 = null;

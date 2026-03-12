@@ -141,6 +141,15 @@ After forfeiting a game and clicking "Menu" on the win overlay, the return-to-ga
 **3. Back to menu doesn't release player slot**
 When a player clicked "← Menu" mid-game, the client cleared sessionStorage but never notified the server. The server still held their stale socket in the game. If they later tried to rejoin, the server saw both slots as occupied and either rejected them or reset them to placement. Fix: client now emits `leave-game` before clearing local state, and the server releases the socket slot and removes them from the Socket.IO room.
 
+**4. Player slot assignment uses ephemeral sockets instead of persisted tokens**
+After a server restart, `game.sockets` is empty (ephemeral/per-process), so when Player 2 joined a game, the server checked `game.sockets.p1` (falsy) and assigned them as `p1` — overwriting Player 1's token. Player 1 could then never rejoin. Fix: use `game.tokens.p1` instead of `game.sockets.p1` to determine slot availability, since tokens are persisted to Redis/SQLite.
+
+**5. Ready state not serialized to Redis**
+In multiplayer across two server processes, `ready` was stored only in the ephemeral per-process `socketMap`. When Player 2 placed ships on process B, it never saw Player 1's `ready.p1` from process A, so the game never transitioned to firing. Fix: added `ready` to `serializeGame`/`restoreGame` so it persists to Redis alongside other game state.
+
+**6. Return/forfeit buttons visible after game ends**
+When a game finished (win, loss, or forfeit), sessionStorage was cleared but the in-memory `gameId`/`playerId` variables weren't nulled and `updateReturnButton()` wasn't called. The stale in-memory state caused the return/forfeit buttons to remain visible on the menu. Fix: null out in-memory vars and call `updateReturnButton()` in all three game-end paths (shot-result winner, player-forfeited, rejoin-state winner).
+
 ## Customer Experience
 
 - **Ship placement reset:** Reset button lets players clear all ships and start placement over without refreshing the page.

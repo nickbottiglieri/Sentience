@@ -102,6 +102,15 @@ describe('gameStore (in-memory fallback)', () => {
     expect(stmts.getGame.get).toHaveBeenCalledWith('test-id');
   });
 
+  test('preserves ready state across save/get cycle', async () => {
+    const game = makeGame();
+    game.ready = { p1: true };
+    await gameStore.saveGame(game);
+    const retrieved = await gameStore.getGame('test-id');
+    expect(retrieved.ready.p1).toBe(true);
+    expect(retrieved.ready.p2).toBeUndefined();
+  });
+
   test('deleteGame clears socket state', async () => {
     const { stmts } = require('../src/db');
     stmts.getGame.get.mockReturnValue(null);
