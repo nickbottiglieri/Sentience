@@ -119,6 +119,10 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Example 2 — Duplicate slot assignment:** Two players click "Join" at the same time, routed to different processes. Both read the game, both see `tokens.p1` exists but `tokens.p2` is empty, both assign themselves as `p2` and generate separate tokens. The second write overwrites the first player's token — that player can never rejoin. With locking, the second join waits until the first completes, sees `tokens.p2` is now taken, and gets rejected with "Game is full."
 
+**Health check** — `GET /api/health` returns server status, uptime in seconds, and Redis connectivity (pings Redis to verify it's reachable, not just configured). Reports `connected`, `error`, or `disabled`.
+
+**Graceful shutdown** — On `SIGTERM`/`SIGINT` (e.g., Railway deploying a new version), the server stops accepting new connections, disconnects all sockets (clients auto-reconnect to another instance via Socket.IO — game state is in Redis so they resume seamlessly), closes the Redis connection, and exits. A 10-second force-exit timeout prevents hanging if drain stalls.
+
 ### Step 12 — Health Check & Graceful Shutdown
 
 Added operational readiness features:
