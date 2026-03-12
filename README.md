@@ -29,9 +29,10 @@ Open `http://localhost:3000` in your browser.
 
 ## Scaling Spike
 
-Explored horizontal scaling for real-time Socket.IO across multiple Node.js instances coordinated through Redis. Key findings:
+Explored horizontal scaling for real-time Socket.IO across multiple Node.js instances coordinated through Redis.
 
 - Postgres in the hot path was the bottleneck — batching writes to end-of-game gave a **5× capacity improvement** (200 → 1,000 concurrent games per instance)
+- Verified with load tests: 2 instances handle **1,500 concurrent games** at p50=355ms with zero errors
 - Redis handles distributed locking, live game state, and cross-process Socket.IO rooms
 - Architecture scales horizontally — add instances with no code changes
 

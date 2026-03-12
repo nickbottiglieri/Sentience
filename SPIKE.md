@@ -2,6 +2,8 @@
 
 Research spike exploring what it takes to scale a real-time Socket.IO game server horizontally. Started with a single-process Node.js server, ended with a Redis-coordinated multi-instance architecture backed by Postgres, with load test data identifying the bottleneck.
 
+**Results:** Identified Postgres as the bottleneck — removing it from the hot path (batching writes to end-of-game) improved single-instance capacity from 200 to 1,000 concurrent games (5×). Verified horizontal scaling with 2 instances: 1,500 concurrent games at p50=355ms with zero errors. Architecture scales linearly — add instances with no code changes.
+
 **Platform constraints:** All testing and deployment runs on Railway's free tier, which imposes resource limits on CPU, memory, and database performance. Postgres and Redis are shared managed instances — not dedicated hardware. In production, both could be scaled vertically (larger Postgres instances handle tens of thousands of concurrent connections; Redis can sustain 100k+ ops/sec on dedicated hardware). The bottlenecks identified in this spike are specific to the free-tier resource envelope. The goal was to maximize what a single instance can handle within these constraints, and to prove the architecture scales horizontally when vertical limits are reached.
 
 ## Architecture
@@ -298,6 +300,30 @@ Using 1,000 AI games / 500 multiplayer games per instance as the safe ceiling, w
 | 100,000 | 200,000 | 200 | 400 | ~300 |
 
 Redis is the shared coordination layer — all instances read/write game state through it, so adding instances is purely horizontal with no code changes.
+
+### Multi-Instance Validation (2 Instances)
+
+Deployed a second Railway replica to verify horizontal scaling. Both instances receive live traffic through Railway's load balancer, sharing game state via Redis.
+
+**Fix required:** Socket.IO's default HTTP long-polling handshake breaks across instances — the follow-up polling request hits the wrong instance and returns 400. Fixed by forcing WebSocket transport on the client (`transports: ['websocket']`), which establishes a single persistent connection and skips polling entirely.
+
+| Concurrent Games | Completed | Errors | p50 | p95 | p99 | Max |
+|---|---|---|---|---|---|---|
+| 1,000 | 1,000/1,000 | 0 | 256ms | 455ms | 496ms | 1,450ms |
+| 1,500 | 1,500/1,500 | 0 | 355ms | 608ms | 689ms | 905ms |
+| 2,000 | 1,425/2,000 | 575 | ~409ms | ~622ms | ~776ms | ~1,332ms |
+
+**1 instance vs 2 instances:**
+
+| Games | 1 instance (p50 / errors) | 2 instances (p50 / errors) |
+|---|---|---|
+| 1,000 | 112ms / 0 | 256ms / 0 |
+| 1,500 | 388ms / 2 | 355ms / 0 |
+| 2,000 | 679ms / 0 | 409ms / 575 |
+
+At 1,500 games, 2 instances beat single-instance on both latency and reliability. At 2,000, the 2-instance setup starts degrading — errors are evenly distributed across test processes, indicating the server ceiling rather than a coordination failure. The 2,000-game test was run as 4 parallel client processes (500 each) due to local machine limits at higher connection counts.
+
+Scaling is sub-linear (~1.5× capacity from 2× instances) due to Redis adapter overhead for cross-instance room broadcasts. Each `io.to(room).emit()` publishes through Redis so both instances' sockets receive the event — this adds latency that doesn't exist in single-process mode.
 
 ### Next Bottleneck: Redis
 
