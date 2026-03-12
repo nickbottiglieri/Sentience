@@ -632,7 +632,7 @@ async function showHistory() {
   }
   data.forEach((g) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${new Date(g.finished_at + 'Z').toLocaleString()}</td><td>${g.mode === 'ai' ? 'vs AI' : 'Multiplayer'}</td><td>${g.winner === 'p1' ? 'Player 1' : g.winner === 'p2' ? (g.mode === 'ai' ? 'AI' : 'Player 2') : '-'}</td><td>${g.total_moves}</td>`;
+    tr.innerHTML = `<td>${new Date(g.finished_at).toLocaleString()}</td><td>${g.mode === 'ai' ? 'vs AI' : 'Multiplayer'}</td><td>${g.winner === 'p1' ? 'Player 1' : g.winner === 'p2' ? (g.mode === 'ai' ? 'AI' : 'Player 2') : '-'}</td><td>${g.total_moves}</td>`;
     tbody.appendChild(tr);
   });
 }

@@ -55,7 +55,7 @@ const stmts = pool ? {
   getHistory: {
     all: async () => {
       const r = await pool.query(
-        `SELECT g.id, g.mode, g.winner, g.created_at, g.finished_at, COUNT(m.id)::int as total_moves
+        `SELECT g.id, g.mode, g.winner, g.created_at::text, g.finished_at::text, COUNT(m.id)::int as total_moves
          FROM games g LEFT JOIN moves m ON g.id = m.game_id
          WHERE g.winner IS NOT NULL GROUP BY g.id ORDER BY g.finished_at DESC LIMIT 50`
       );
