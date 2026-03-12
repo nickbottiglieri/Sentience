@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io({ transports: ['websocket'] });
 const SHIPS = [
   { name: 'Carrier', size: 5 },
   { name: 'Battleship', size: 4 },

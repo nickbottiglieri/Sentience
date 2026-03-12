@@ -25,4 +25,18 @@ Open `http://localhost:3000` in your browser.
 - **Storage:** Postgres for game history, Redis for live state
 - **Deployment:** Railway with auto-deploy from GitHub
 
+**Resource limits (Railway):** Postgres — 2 vCPU, 1 GB memory. Redis — 2 vCPU, 1 GB memory.
+
+## Scaling Spike
+
+Explored horizontal scaling for real-time Socket.IO across multiple Node.js instances coordinated through Redis. Key findings:
+
+- Postgres in the hot path was the bottleneck — batching writes to end-of-game gave a **5× capacity improvement** (200 → 1,000 concurrent games per instance)
+- Redis handles distributed locking, live game state, and cross-process Socket.IO rooms
+- Architecture scales horizontally — add instances with no code changes
+
+See [SPIKE.md](SPIKE.md) for the full analysis: distributed locking, bottleneck diagnostics, load test data, and capacity planning.
+
+---
+
 See [DEVLOG.md](DEVLOG.md) for detailed design decisions, security analysis, runtime complexity, and development history.
