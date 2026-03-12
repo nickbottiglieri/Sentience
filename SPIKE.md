@@ -323,6 +323,8 @@ Deployed a second Railway replica to verify horizontal scaling. Both instances r
 
 At 1,500 games, 2 instances beat single-instance on both latency and reliability. At 2,000, the 2-instance setup starts degrading — errors are evenly distributed across test processes, indicating the server ceiling rather than a coordination failure. The 2,000-game test was run as 4 parallel client processes (500 each) due to local machine limits at higher connection counts.
 
+**Post-test note:** After cumulative load testing (~4,500+ games across all test runs), Postgres ran out of disk space (1 GB limit). Each completed game batch-flushes ~60 moves, so thousands of games filled the volume. This means some of the 2,000-game errors may have been caused by Postgres disk pressure rather than pure compute/network limits. The 1,500-game result (zero errors) is the clean data point for 2-instance capacity.
+
 Scaling is sub-linear (~1.5× capacity from 2× instances) due to Redis adapter overhead for cross-instance room broadcasts. Each `io.to(room).emit()` publishes through Redis so both instances' sockets receive the event — this adds latency that doesn't exist in single-process mode.
 
 ### Next Bottleneck: Redis
