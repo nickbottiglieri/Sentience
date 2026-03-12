@@ -2,3 +2,4 @@ node_modules/
 battleship.db
 battleship.db-shm
 battleship.db-wal
+dump.rdb
