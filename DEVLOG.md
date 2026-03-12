@@ -113,6 +113,8 @@ Ephemeral state (socket IDs, ready flags) is kept in a separate in-memory `socke
 
 **Backward compatible:** Without `REDIS_URL`, the app falls back to in-memory storage and behaves identically to before.
 
+**Distributed locking** — Added `withLock(gameId, fn)` to prevent race conditions when concurrent events for the same game hit different server processes. Uses Redis `SET NX PX` (atomic acquire with 5s auto-expire) with retry logic (20 attempts, 50ms delay). Every handler that reads, mutates, and writes game state is wrapped in a lock. Without Redis, `withLock` is a no-op — zero overhead in single-process mode.
+
 ### Step 11 — Unit Tests
 
 Added Jest test suite (28 tests) covering the three core modules:
