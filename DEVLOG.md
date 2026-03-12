@@ -143,6 +143,22 @@ We tested with 2 processes because that's the minimum needed to prove cross-proc
 
 All 150 games completed with zero errors — no lost shots, no state corruption, no lock timeouts. Latency stayed flat across all 3 rounds, indicating no degradation under sustained load. These numbers serve as the benchmark for the distributed architecture.
 
+**Locking strategy analysis — pessimistic vs optimistic:**
+
+The current implementation uses pessimistic locking (Redis mutex via `SET NX PX`). Every read-mutate-write acquires a lock first, even when no conflict exists. This guarantees correctness but adds 2 extra Redis round-trips per operation (acquire + release).
+
+An alternative is optimistic concurrency control (OCC): read the game with a version number, mutate locally, and on write check if the version is still what you read. If it is, save and increment. If not, someone else wrote first — retry. No lock overhead on the happy path.
+
+| | Pessimistic (current) | Optimistic (OCC) |
+|---|---|---|
+| Overhead per operation | 2 Redis round-trips (always) | 0 on happy path, retry on conflict |
+| Conflict handling | Block until lock is free | Retry with fresh read |
+| Risk | Lock timeout / deadlock (mitigated by 5s TTL) | Livelock under high contention (repeated retries) |
+| Complexity | Simple acquire/release | Version tracking + retry logic |
+| Best for | High-contention workloads | Low-contention workloads |
+
+Battleship is inherently low-contention — turn-based games rarely produce simultaneous events for the same game. `place-ships` is the only realistic collision window (both players place at the same time). OCC would eliminate lock overhead on ~99.9% of operations while still handling the edge case via retry. Pessimistic locking is the safer default, but OCC is the more efficient choice for this specific workload.
+
 ### Step 12 — Health Check & Graceful Shutdown
 
 Added operational readiness features:
